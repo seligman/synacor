@@ -2,6 +2,7 @@
 
 from collections import deque, defaultdict
 from struct import unpack
+from datetime import datetime
 
 _opcodes = {"names": set()}
 
@@ -69,7 +70,32 @@ def op_wmem(program, dest, src):
 @opcode("out", 19, 2)
 def op_out(program, value):
     value = program.get_val(value)
+    if chr(value) == '\n':
+        program.handle_io("   " + program.output_buffer)
+        program.output_buffer = ""
+    else:
+        program.output_buffer += chr(value)
     print(chr(value), end='', flush=True)
+
+
+@opcode("in", 20, 2)
+def op_in(program, dest):
+    if len(program.input_buffer) == 0:
+        temp = input()
+        temp = temp.strip()
+        if temp in {"quit", "exit"}:
+            raise ProgramException("Stopping at user request")
+        temp += "\n"
+        program.input_buffer += temp
+
+    if program.input_buffer[0] == "\n":
+        program.handle_io("+> " + program.input_buffer_echo)
+        program.input_buffer_echo = ""
+    else:
+        program.input_buffer_echo += program.input_buffer[0]
+
+    program.set_val(dest, ord(program.input_buffer[0]))
+    program.input_buffer = program.input_buffer[1:]
 
 
 @opcode("noop", 21, 1)
@@ -169,6 +195,16 @@ class Program:
         self.memory = {}
         self.registers = [0] * 8
         self.stack = deque()
+        self.input_buffer = ""
+        self.input_buffer_echo = ""
+        self.output_buffer = ""
+
+        self.handle_io("----- Program Log for " + datetime.now().strftime("%Y-%m-%d %H:%M:%S") + " -----")
+        self.handle_io("")
+
+    def handle_io(self, value):
+        with open("program.log", "a") as f:
+            f.write(value + "\n")
 
     def load_string(self, value):
         values = [int(x) for x in value.split(',')]
