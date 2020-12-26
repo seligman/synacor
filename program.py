@@ -3,14 +3,20 @@
 from collections import deque, defaultdict
 from struct import unpack
 
-_opcodes = {}
+_opcodes = {"names": set()}
 
-def opcode(name, value, size):
+
+def opcode(name, opcode_num, size):
     def real_opts(func):
-        _opcodes[value] = {
+        if opcode_num in _opcodes:
+            raise Exception(f"opcode {opcode_num} used more than once")
+        if name in _opcodes['names']:
+            raise Exception(f"name '{name}' used more than once")
+        _opcodes['names'].add(name)
+        _opcodes[opcode_num] = {
             'func': func,
             'name': name,
-            'opcode': value,
+            'opcode': opcode_num,
             'size': size,
         }
         def wrapper(*args2, **kwargs):
@@ -35,6 +41,31 @@ def op_add(program, dest, a, b):
     program.set_val(dest, value)
 
 
+@opcode("mult", 10, 4)
+def op_mult(program, dest, a, b):
+    value = (program.get_val(a) * program.get_val(b)) % 32768
+    program.set_val(dest, value)
+
+
+@opcode("mod", 11, 4)
+def op_mod(program, dest, a, b):
+    value = (program.get_val(a) % program.get_val(b))
+    program.set_val(dest, value)
+
+
+@opcode("rmem", 15, 3)
+def op_rmem(program, dest, src):
+    src = program.get_val(src)
+    program.set_val(dest, program.memory[src])
+
+
+@opcode("wmem", 16, 3)
+def op_wmem(program, dest, src):
+    src = program.get_val(src)
+    dest = program.get_val(dest)
+    program.memory[dest] = src
+
+
 @opcode("out", 19, 2)
 def op_out(program, value):
     value = program.get_val(value)
@@ -44,6 +75,92 @@ def op_out(program, value):
 @opcode("noop", 21, 1)
 def op_noop(program):
     pass
+
+
+@opcode("jmp", 6, 2)
+def op_jmp(program, target):
+    target = program.get_val(target)
+    program.pc = target
+
+
+@opcode("call", 17, 2)
+def op_call(program, target):
+    target = program.get_val(target)
+    program.stack.append(program.pc)
+    program.pc = target
+
+
+@opcode("ret", 18, 1)
+def op_ret(program):
+    target = program.stack.pop()
+    program.pc = target
+
+
+@opcode("jt", 7, 3)
+def op_jt(program, value, target):
+    target = program.get_val(target)
+    value = program.get_val(value)
+    if value != 0:
+        program.pc = target
+
+
+@opcode("jf", 8, 3)
+def op_jf(program, value, target):
+    target = program.get_val(target)
+    value = program.get_val(value)
+    if value == 0:
+        program.pc = target
+
+
+@opcode("set", 1, 3)
+def op_set(program, dest, value):
+    value = program.get_val(value)
+    program.set_val(dest, value)
+
+
+@opcode("eq", 4, 4)
+def op_eq(program, dest, a, b):
+    a = program.get_val(a)
+    b = program.get_val(b)
+    program.set_val(dest, 1 if a == b else 0)
+
+
+@opcode("gt", 5, 4)
+def op_gt(program, dest, a, b):
+    a = program.get_val(a)
+    b = program.get_val(b)
+    program.set_val(dest, 1 if a > b else 0)
+
+
+@opcode("and", 12, 4)
+def op_and(program, dest, a, b):
+    a = program.get_val(a)
+    b = program.get_val(b)
+    program.set_val(dest, a & b)
+
+
+@opcode("or", 13, 4)
+def op_or(program, dest, a, b):
+    a = program.get_val(a)
+    b = program.get_val(b)
+    program.set_val(dest, a | b)
+
+
+@opcode("not", 14, 3)
+def op_not(program, dest, a):
+    a = program.get_val(a)
+    program.set_val(dest, a ^ 32767)
+
+
+@opcode("push", 2, 2)
+def op_push(program, value):
+    value = program.get_val(value)
+    program.stack.append(value)
+
+
+@opcode("pop", 3, 2)
+def op_pop(program, dest):
+    program.set_val(dest, program.stack.pop())
 
 
 class Program:
@@ -81,7 +198,7 @@ class Program:
                     raise ProgramException("End of program")
                 opcode = self.memory[self.pc]
                 if opcode not in _opcodes:
-                    raise ProgramException("Unknown opcode: " + str(opcode))
+                    raise ProgramException(f"Unknown opcode: {opcode}")
                 opcode = _opcodes[opcode]
                 args = [self]
                 for i in range(1, opcode['size']):
@@ -89,4 +206,4 @@ class Program:
                 self.pc += opcode['size']
                 opcode['func'](*args)
         except ProgramException as msg:
-            print("Status: " + msg.msg)
+            print(f"Status: {msg.msg}")
