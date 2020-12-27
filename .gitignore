@@ -1,5 +1,6 @@
 # Ignore the root helpers, and the private code
 /bounce_git.py
+/private/*
 
 # Ignore VS Code stuff
 **/.vscode/
