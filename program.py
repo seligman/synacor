@@ -6,7 +6,7 @@ from datetime import datetime
 from inspect import signature
 import zipfile
 
-_opcodes = {"names": set()}
+_opcodes = {"names": {}}
 
 
 def opcode(name, opcode_num):
@@ -15,7 +15,7 @@ def opcode(name, opcode_num):
             raise Exception(f"opcode {opcode_num} used more than once")
         if name in _opcodes['names']:
             raise Exception(f"name '{name}' used more than once")
-        _opcodes['names'].add(name)
+        _opcodes['names'][name] = opcode_num
         _opcodes[opcode_num] = {
             'func': func,
             'name': name,
@@ -78,16 +78,19 @@ def op_out(program, value):
     else:
         value = chr(value)
     if value == '\n':
+        program.room.append(program.output_buffer)
         program.handle_io("   " + program.output_buffer)
         program.output_buffer = ""
     else:
         program.output_buffer += value
-    print(value, end='', flush=True)
+    if not program.hide_output:
+        print(value, end='', flush=True)
 
 
 @opcode("in", 20)
 def op_in(program, dest):
     if len(program.input_buffer) == 0:
+        program.room = []
         temp = input()
         temp = temp.strip()
         if temp in {"quit", "exit"}:
@@ -248,8 +251,10 @@ class Program:
         self.input_buffer = ""
         self.input_buffer_echo = ""
         self.output_buffer = ""
+        self.room = []
 
         self.save_state = None
+        self.hide_output = False
 
         self.handle_io("----- Program Log for " + datetime.now().strftime("%Y-%m-%d %H:%M:%S") + " -----")
         self.handle_io("")
@@ -319,12 +324,16 @@ class Program:
         else:
             self.registers[dest - 32768] = value
 
-    def run(self):
+    def run(self, abort_on_input=False, hide_output=False):
+        self.hide_output = hide_output
         try:
             while True:
                 if self.pc >= len(self.memory):
                     raise ProgramException("End of program")
                 opcode = self.memory[self.pc]
+                if abort_on_input and len(self.input_buffer) == 0:
+                    if opcode == _opcodes['names']['in']:
+                        return
                 if opcode not in _opcodes:
                     raise ProgramException(f"Unknown opcode: {opcode}")
                 opcode = _opcodes[opcode]
@@ -334,6 +343,7 @@ class Program:
                 self.pc += opcode['size']
                 opcode['func'](*args)
         except ProgramException as msg:
-            if len(self.output_buffer) > 0:
-                print("", flush=True)
-            print(f"Status: {msg.msg}")
+            if not self.hide_output:
+                if len(self.output_buffer) > 0:
+                    print("", flush=True)
+                print(f"Status: {msg.msg}")
