@@ -42,6 +42,41 @@ def run():
     program.load_bytes(machine)
     program.run()
 
+@opt("Solve the vault")
+def vault():
+    grid = [
+        ["*", 8, "-", 1],
+        [4, "*", 11, "*"],
+        ["+", 4, "-", 18],
+        [None, "-", 9, "*"],
+    ]
+
+    from collections import deque
+    todo = deque([(0, 3, [], 22, None)])
+    while len(todo) > 0:
+        x, y, steps, val, op = todo.popleft()
+        temp = grid[y][x]
+        if isinstance(temp, int):
+            if op == "+":
+                val = val + temp
+            elif op == "-":
+                val = val - temp
+            elif op == "*":
+                val = val * temp
+            op = None
+        else:
+            op = temp
+        if (x, y) == (3, 0):
+            # print(val, steps)
+            if val == 30:
+                print(steps, val)
+                # break
+        else:
+            for xo, yo, dir in [(0, -1, "n"), (0, 1, "s"), (-1, 0, "w"), (1, 0, "e")]:
+                xt, yt = x + xo, y + yo
+                if xt >= 0 and yt >= 0 and xt < 4 and yt < 4:
+                    todo.append((xt, yt, steps[:] + [dir], val, op))
+
 
 @opt("Run the program from a saved state")
 def load(filename):
@@ -51,6 +86,29 @@ def load(filename):
     program.load_bytes(machine)
     program.deserialize(filename)
     program.run()
+    # program.breakpoints.add("inv 5451")
+
+    # zz = program.clone()
+    # for i in range(25734,32768):
+    #     # program = zz.clone()
+    #     program.registers[7] = i
+        
+    #     program.memory[5489] = 21
+    #     program.memory[5489+1] = 21
+    #     program.memory[5495] = 21
+    #     program.memory[5495+1] = 21
+    #     program.memory[5495+2] = 21
+    #     program.input_buffer = "use teleporter\n"
+    #     program.room = []
+    #     program.run(abort_on_input=True, hide_output=True)
+
+    #     z = ",".join(program.room)
+    #     if "Miscalibration detected!" not in z:
+    #         print(program.room)
+    #         program.serialize("z.zip")
+    #         return
+    #     else:
+    #         print(i)
 
 
 @opt("Run the program, looking for events")
@@ -172,9 +230,6 @@ def auto():
                         states.append((program.clone(), door, path[:], inv[:]))
 
     program.save_state.serialize(os.path.join('source', 'book.zip'))
-
-    # # TODO
-    # program.run()
 
 
 if __name__ == "__main__":

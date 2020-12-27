@@ -72,6 +72,9 @@ def op_wmem(program, dest, src):
 
 @opcode("out", 19)
 def op_out(program, value):
+    if "bpo" in program.breakpoints:
+        if program.output_buffer == "":
+            program.breakpoint()
     value = program.get_val(value)
     if value < 32 and value != ord('\n'):
         value = "\\x%02X" % (value,)
@@ -87,17 +90,64 @@ def op_out(program, value):
         print(value, end='', flush=True)
 
 
+def debugger(program, value):
+    if value == "?":
+        print("bpo      = Break on output")
+        print("bpr #    = Break on a read of register #x")
+        print("setr r # = Set register r to #")
+        print("dump     = Decompile code")
+        print("inv #    = Invert the meaning of #")
+        print("jmp #    = Jump to a PC")
+        print("noop #   = Noop an instruction")
+        return True
+    if value.startswith("noop "):
+        program.memory[int(value[5:])] = 21
+        print("noop set")
+        return True
+    if value.startswith("jmp "):
+        program.pc = int(value[4:])
+        print("PC set")
+        return True
+    if value.startswith("inv "):
+        program.breakpoints.add(value)
+        print("Inverted meaning added")
+        return True
+    if value.startswith("bpr "):
+        program.breakpoints.add(value)
+        print("Breakpoint added")
+        return True
+    if value.startswith("bpo"):
+        program.breakpoints.add(value)
+        print("Breakpoint added")
+        return True
+    if value.startswith("setr"):
+        value = value.split(' ')
+        program.registers[int(value[1])] = int(value[2])
+        print(f"Register {value[1]} set to {value[2]}")
+        return True
+    if value.startswith("dump"):
+        program.dump("decompiled.txt")
+        print("Program decompiled")
+        return True
+    return False
+
+
 @opcode("in", 20)
 def op_in(program, dest):
     if len(program.input_buffer) == 0:
         program.room = []
-        temp = input()
-        temp = temp.strip()
-        if temp in {"quit", "exit"}:
-            raise ProgramException("Stopping at user request")
-        if temp in {"save"}:
-            program.save_state.serialize("temp.zip")
-            raise ProgramException("Program state saved")
+        temp = ""
+        while len(temp) == 0:
+            temp = input()
+            temp = temp.strip()
+            if temp in {"quit", "exit"}:
+                raise ProgramException("Stopping at user request")
+            if temp in {"save"}:
+                program.save_state.serialize("temp.zip")
+                raise ProgramException("Program state saved")
+            if debugger(program, temp):
+                print("? ", end="", flush=True)
+                temp = ""
         temp += "\n"
         program.input_buffer += temp
 
@@ -142,16 +192,26 @@ def op_ret(program):
 def op_jt(program, value, target):
     target = program.get_val(target)
     value = program.get_val(value)
-    if value != 0:
-        program.pc = target
+    if f"inv {program.history[-1]}" in program.breakpoints:
+        print(f"Invert logic hit for {program.history[-1]}")
+        if value == 0:
+            program.pc = target
+    else:
+        if value != 0:
+            program.pc = target
 
 
 @opcode("jf", 8)
 def op_jf(program, value, target):
     target = program.get_val(target)
     value = program.get_val(value)
-    if value == 0:
-        program.pc = target
+    if f"inv {program.history[-1]}" in program.breakpoints:
+        print(f"Invert logic hit for {program.history[-1]}")
+        if value != 0:
+            program.pc = target
+    else:
+        if value == 0:
+            program.pc = target
 
 
 @opcode("set", 1)
@@ -241,6 +301,7 @@ class Serialize:
         self.add_int(len(value))
         self.buffer.append(value)
 
+
 class Program:
     def __init__(self):
         self.pc = 0
@@ -255,6 +316,8 @@ class Program:
 
         self.save_state = None
         self.hide_output = False
+        self.breakpoints = set()
+        self.history = deque()
 
         self.handle_io("----- Program Log for " + datetime.now().strftime("%Y-%m-%d %H:%M:%S") + " -----")
         self.handle_io("")
@@ -316,7 +379,49 @@ class Program:
         if value < 32768:
             return value
         else:
+            if f"bpr {value - 32768}" in self.breakpoints:
+                self.breakpoint()
             return self.registers[value - 32768]
+
+    def dump(self, filename):
+        with open(filename, "w") as f:
+            pc = 0
+            while pc < len(self.memory):
+                if self.memory[pc] in _opcodes:
+                    op = _opcodes[self.memory[pc]]
+                    info = f"{pc:5d}: {op['name']:<4}"
+                    pc += 1
+                    for _ in range(op['size']-1):
+                        if self.memory[pc] < 32768:
+                            info += f" {self.memory[pc]}"
+                        else:
+                            info += f" [{self.memory[pc] - 32768}]"
+                        pc += 1
+                else:
+                    info = f"{pc:5d}: {self.memory[pc]}"
+                    pc += 1
+                f.write(info + "\n")
+
+    def breakpoint(self):
+        print(self.registers)
+        temp = self.history.copy()
+        for _ in range(20):
+            if len(temp) > 0:
+                pc = temp.popleft()
+            if self.memory[pc] in _opcodes:
+                op = _opcodes[self.memory[pc]]
+                info = f"{'>' if pc == self.history[-1] else ' '} {pc:5d}: {op['name']:<4}"
+                pc += 1
+                for _ in range(op['size']-1):
+                    if self.memory[pc] < 32768:
+                        info += f" {self.memory[pc]}"
+                    else:
+                        info += f" [{self.memory[pc] - 32768}]"
+                    pc += 1
+            else:
+                info = f"{pc:5d}: {self.memory[pc]}"
+                pc += 1
+            print(info)
 
     def set_val(self, dest, value):
         if dest < 32768:
@@ -330,6 +435,9 @@ class Program:
             while True:
                 if self.pc >= len(self.memory):
                     raise ProgramException("End of program")
+                self.history.append(self.pc)
+                while len(self.history) > 5:
+                    self.history.popleft()
                 opcode = self.memory[self.pc]
                 if abort_on_input and len(self.input_buffer) == 0:
                     if opcode == _opcodes['names']['in']:
