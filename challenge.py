@@ -6,11 +6,6 @@ import zipfile
 import os
 
 
-@opt("Hello, world")
-def hello():
-    print("This is a hello, world example")
-
-
 @opt("Run example program")
 def test():
     program = Program()
@@ -19,10 +14,28 @@ def test():
 
 @opt("Run the program")
 def run():
-    zip = zipfile.ZipFile(os.path.join("source", "challenge.zip"), 'r')
-    machine = zip.read('challenge.bin')
+    with zipfile.ZipFile(os.path.join("source", "challenge.zip"), 'r') as zip:
+        machine = zip.read('challenge.bin')
     program = Program()
     program.load_bytes(machine)
+    program.run()
+
+
+@opt("Run the program from a saved state")
+def load(filename):
+    program = Program()
+    program.deserialize(filename)
+    program.run()
+
+
+@opt("Run the program, looking for events")
+def auto():
+    with zipfile.ZipFile(os.path.join("source", "challenge.zip"), 'r') as zip:
+        machine = zip.read('challenge.bin')
+    program = Program()
+    program.load_bytes(machine)
+    program.deserialize(os.path.join("source", "start_state.zip"))
+    # TODO
     program.run()
 
 

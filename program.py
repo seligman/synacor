@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 
 from collections import deque, defaultdict
-from struct import unpack
+from struct import unpack, pack
 from datetime import datetime
 from inspect import signature
+import zipfile
 
 _opcodes = {"names": set()}
 
@@ -66,6 +67,7 @@ def op_wmem(program, dest, src):
     src = program.get_val(src)
     dest = program.get_val(dest)
     program.memory[dest] = src
+    program.changed[dest] = src
 
 
 @opcode("out", 19)
@@ -90,6 +92,9 @@ def op_in(program, dest):
         temp = temp.strip()
         if temp in {"quit", "exit"}:
             raise ProgramException("Stopping at user request")
+        if temp in {"save"}:
+            program.save_state.serialize("temp.zip")
+            raise ProgramException("Program state saved")
         temp += "\n"
         program.input_buffer += temp
 
@@ -101,6 +106,9 @@ def op_in(program, dest):
 
     program.set_val(dest, ord(program.input_buffer[0]))
     program.input_buffer = program.input_buffer[1:]
+
+    if len(program.input_buffer) == 0:
+        program.save_state = program.clone()
 
 
 @opcode("noop", 21)
@@ -194,31 +202,110 @@ def op_pop(program, dest):
     program.set_val(dest, program.stack.pop())
 
 
+class Serialize:
+    def __init__(self):
+        self.buffer = []
+        self.offset = 0
+
+    def read_int(self):
+        ret = unpack("<H", self.buffer[self.offset:self.offset+2])[0]
+        self.offset += 2
+        return ret
+
+    def read_list(self):
+        ret = []
+        count = self.read_int()
+        for _ in range(count):
+            ret.append(self.read_int())
+        return ret
+
+    def read_str(self):
+        count = self.read_int()
+        ret = self.buffer[self.offset:self.offset+count].decode("utf-8")
+        self.offset += count
+        return ret
+
+    def add_int(self, value):
+        self.buffer.append(pack('<H', value))
+
+    def add_list(self, value):
+        self.add_int(len(value))
+        for cur in value:
+            self.add_int(cur)
+
+    def add_str(self, value):
+        value = value.encode("utf-8")
+        self.add_int(len(value))
+        self.buffer.append(value)
+
 class Program:
     def __init__(self):
         self.pc = 0
-        self.memory = {}
+        self.memory = []
+        self.changed = {}
         self.registers = [0] * 8
         self.stack = deque()
         self.input_buffer = ""
         self.input_buffer_echo = ""
         self.output_buffer = ""
 
+        self.save_state = None
+
         self.handle_io("----- Program Log for " + datetime.now().strftime("%Y-%m-%d %H:%M:%S") + " -----")
         self.handle_io("")
+
+    def clone(self):
+        ret = Program()
+        ret.pc = self.pc
+        ret.memory = self.memory[:]
+        ret.changed = self.changed.copy()
+        ret.registers = self.registers[:]
+        ret.stack = self.stack.copy()
+        ret.input_buffer = self.input_buffer
+        ret.input_buffer_echo = self.input_buffer_echo
+        ret.output_buffer = self.output_buffer
+        return ret
+
+    def deserialize(self, filename):
+        data = Serialize()
+        with zipfile.ZipFile(filename, 'r') as zip:
+            data.buffer = zip.read('state.bin')
+        self.pc = data.read_int()
+        self.registers = data.read_list()
+        self.stack = deque(data.read_list())
+        keys = data.read_list()
+        values = data.read_list()
+        self.changed = {keys[x]: values[x] for x in range(len(keys))}
+        for key, value in self.changed.items():
+            self.memory[key] = value
+        self.input_buffer = data.read_str()
+        self.input_buffer_echo = data.read_str()
+        self.output_buffer = data.read_str()
+
+    def serialize(self, filename):
+        data = Serialize()
+        data.add_int(self.pc)
+        data.add_list(self.registers)
+        data.add_list(self.stack)
+        data.add_list(self.changed.keys())
+        data.add_list(self.changed.values())
+        data.add_str(self.input_buffer)
+        data.add_str(self.input_buffer_echo)
+        data.add_str(self.output_buffer)
+        with zipfile.ZipFile(filename, 'w', compression=zipfile.ZIP_BZIP2, compresslevel=9) as zip:
+            zip.writestr('state.bin', b''.join(data.buffer))
 
     def handle_io(self, value):
         with open("program.log", "a") as f:
             f.write(value + "\n")
 
     def load_string(self, value):
-        values = [int(x) for x in value.split(',')]
-        for i in range(len(values)):
-            self.memory[i] = values[i]
+        self.memory = [int(x) for x in value.split(',')]
+        self.changed = {}
 
     def load_bytes(self, value):
-        for i in range(0, len(value), 2):
-            self.memory[i // 2] = unpack('<H', value[i:i+2])[0]
+        self.memory = list(unpack('<' + 'H' * (len(value) // 2), value))
+        self.changed = {}
 
     def get_val(self, value):
         if value < 32768:
@@ -235,7 +322,7 @@ class Program:
     def run(self):
         try:
             while True:
-                if self.pc not in self.memory:
+                if self.pc >= len(self.memory):
                     raise ProgramException("End of program")
                 opcode = self.memory[self.pc]
                 if opcode not in _opcodes:
