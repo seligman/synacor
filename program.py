@@ -3,11 +3,12 @@
 from collections import deque, defaultdict
 from struct import unpack
 from datetime import datetime
+from inspect import signature
 
 _opcodes = {"names": set()}
 
 
-def opcode(name, opcode_num, size):
+def opcode(name, opcode_num):
     def real_opts(func):
         if opcode_num in _opcodes:
             raise Exception(f"opcode {opcode_num} used more than once")
@@ -18,7 +19,7 @@ def opcode(name, opcode_num, size):
             'func': func,
             'name': name,
             'opcode': opcode_num,
-            'size': size,
+            'size': len(signature(func).parameters),
         }
         def wrapper(*args2, **kwargs):
             return func(*args2, **kwargs)
@@ -31,54 +32,58 @@ class ProgramException(BaseException):
         self.msg = msg
 
 
-@opcode("halt", 0, 1)
+@opcode("halt", 0)
 def op_halt(program):
     raise ProgramException("Halt instruction hit!")
 
 
-@opcode("add", 9, 4)
+@opcode("add", 9)
 def op_add(program, dest, a, b):
     value = (program.get_val(a) + program.get_val(b)) % 32768
     program.set_val(dest, value)
 
 
-@opcode("mult", 10, 4)
+@opcode("mult", 10)
 def op_mult(program, dest, a, b):
     value = (program.get_val(a) * program.get_val(b)) % 32768
     program.set_val(dest, value)
 
 
-@opcode("mod", 11, 4)
+@opcode("mod", 11)
 def op_mod(program, dest, a, b):
     value = (program.get_val(a) % program.get_val(b))
     program.set_val(dest, value)
 
 
-@opcode("rmem", 15, 3)
+@opcode("rmem", 15)
 def op_rmem(program, dest, src):
     src = program.get_val(src)
     program.set_val(dest, program.memory[src])
 
 
-@opcode("wmem", 16, 3)
+@opcode("wmem", 16)
 def op_wmem(program, dest, src):
     src = program.get_val(src)
     dest = program.get_val(dest)
     program.memory[dest] = src
 
 
-@opcode("out", 19, 2)
+@opcode("out", 19)
 def op_out(program, value):
     value = program.get_val(value)
-    if chr(value) == '\n':
+    if value < 32 and value != ord('\n'):
+        value = "\\x%02X" % (value,)
+    else:
+        value = chr(value)
+    if value == '\n':
         program.handle_io("   " + program.output_buffer)
         program.output_buffer = ""
     else:
-        program.output_buffer += chr(value)
-    print(chr(value), end='', flush=True)
+        program.output_buffer += value
+    print(value, end='', flush=True)
 
 
-@opcode("in", 20, 2)
+@opcode("in", 20)
 def op_in(program, dest):
     if len(program.input_buffer) == 0:
         temp = input()
@@ -98,31 +103,31 @@ def op_in(program, dest):
     program.input_buffer = program.input_buffer[1:]
 
 
-@opcode("noop", 21, 1)
+@opcode("noop", 21)
 def op_noop(program):
     pass
 
 
-@opcode("jmp", 6, 2)
+@opcode("jmp", 6)
 def op_jmp(program, target):
     target = program.get_val(target)
     program.pc = target
 
 
-@opcode("call", 17, 2)
+@opcode("call", 17)
 def op_call(program, target):
     target = program.get_val(target)
     program.stack.append(program.pc)
     program.pc = target
 
 
-@opcode("ret", 18, 1)
+@opcode("ret", 18)
 def op_ret(program):
     target = program.stack.pop()
     program.pc = target
 
 
-@opcode("jt", 7, 3)
+@opcode("jt", 7)
 def op_jt(program, value, target):
     target = program.get_val(target)
     value = program.get_val(value)
@@ -130,7 +135,7 @@ def op_jt(program, value, target):
         program.pc = target
 
 
-@opcode("jf", 8, 3)
+@opcode("jf", 8)
 def op_jf(program, value, target):
     target = program.get_val(target)
     value = program.get_val(value)
@@ -138,53 +143,53 @@ def op_jf(program, value, target):
         program.pc = target
 
 
-@opcode("set", 1, 3)
+@opcode("set", 1)
 def op_set(program, dest, value):
     value = program.get_val(value)
     program.set_val(dest, value)
 
 
-@opcode("eq", 4, 4)
+@opcode("eq", 4)
 def op_eq(program, dest, a, b):
     a = program.get_val(a)
     b = program.get_val(b)
     program.set_val(dest, 1 if a == b else 0)
 
 
-@opcode("gt", 5, 4)
+@opcode("gt", 5)
 def op_gt(program, dest, a, b):
     a = program.get_val(a)
     b = program.get_val(b)
     program.set_val(dest, 1 if a > b else 0)
 
 
-@opcode("and", 12, 4)
+@opcode("and", 12)
 def op_and(program, dest, a, b):
     a = program.get_val(a)
     b = program.get_val(b)
     program.set_val(dest, a & b)
 
 
-@opcode("or", 13, 4)
+@opcode("or", 13)
 def op_or(program, dest, a, b):
     a = program.get_val(a)
     b = program.get_val(b)
     program.set_val(dest, a | b)
 
 
-@opcode("not", 14, 3)
+@opcode("not", 14)
 def op_not(program, dest, a):
     a = program.get_val(a)
     program.set_val(dest, a ^ 32767)
 
 
-@opcode("push", 2, 2)
+@opcode("push", 2)
 def op_push(program, value):
     value = program.get_val(value)
     program.stack.append(value)
 
 
-@opcode("pop", 3, 2)
+@opcode("pop", 3)
 def op_pop(program, dest):
     program.set_val(dest, program.stack.pop())
 
@@ -242,4 +247,6 @@ class Program:
                 self.pc += opcode['size']
                 opcode['func'](*args)
         except ProgramException as msg:
+            if len(self.output_buffer) > 0:
+                print("", flush=True)
             print(f"Status: {msg.msg}")

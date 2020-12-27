@@ -14,7 +14,7 @@ def hello():
 @opt("Run example program")
 def test():
     program = Program()
-    program.load_string("9,32768,32769,33,19,32768,9,32768,32769,10,19,32768")
+    program.load_string("9,32768,32769,4,19,32768")
     program.run()
 
 @opt("Run the program")
