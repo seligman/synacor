@@ -60,6 +60,8 @@ def op_mod(program, dest, a, b):
 @opcode("rmem", 15)
 def op_rmem(program, dest, src):
     src = program.get_val(src)
+    if program.log_reads:
+        program.show(f">> Memory read {src} > {program.memory[src]}")
     program.set_val(dest, program.memory[src])
 
 
@@ -77,6 +79,13 @@ def op_out(program, value):
         if program.output_buffer == "":
             program.breakpoint()
     value = program.get_val(value)
+    valid = True
+    if value < 32 and value != 10:
+        valid = False
+    if value >= 127:
+        valid = False
+    if not valid:
+        raise ProgramException("Unknown output character")
     if _io_logger:
         _io_logger.handle_output(program, chr(value))
     if value < 32 and value != ord('\n'):
@@ -328,6 +337,7 @@ class Program:
         self.save_state = None
         self.hide_output = False
         self.log_all = False
+        self.log_reads = False
         self.breakpoints = set()
         self.history = deque()
 
@@ -403,6 +413,8 @@ class Program:
         else:
             if f"bpr {value - 32768}" in self.breakpoints:
                 self.breakpoint()
+            if self.log_reads:
+                self.show(f">> Register read {value - 32768} > {self.registers[value - 32768]}")
             return self.registers[value - 32768]
 
     def decode(self, pc):
@@ -479,9 +491,11 @@ class Program:
                     args.append(self.memory[self.pc + i])
                 self.pc += opcode['size']
                 opcode['func'](*args)
+            return "Done"
         except ProgramException as msg:
             if not self.hide_output:
                 if len(self.output_buffer) > 0:
                     print("", flush=True)
                 print(f"ERROR: {msg.msg}")
                 self.handle_io(f"ERROR: {msg.msg}")
+            return msg.msg

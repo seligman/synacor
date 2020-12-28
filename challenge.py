@@ -93,6 +93,44 @@ class Logger:
             self.state = ''
             self.msgs = []
 
+@opt("Find all rooms")
+def find_rooms():
+    with zipfile.ZipFile(os.path.join("source", "challenge.zip"), 'r') as zip:
+        machine = zip.read('challenge.bin')
+    program = Program()
+    program.load_bytes(machine)
+    program.deserialize(os.path.join("source", "beach.zip"))
+    program.run(abort_on_input=True, hide_output=True)
+
+    known_rooms = set([
+        2317, 2327, 2332, 2337, 2342, 2347, 2352, 2357, 2362, 
+        2367, 2372, 2377, 2397, 2402, 2417, 2427, 2432, 2437, 
+        2442, 2447, 2452, 2457, 2463, 2468, 2473, 2478, 2483, 
+        2488, 2498, 2513, 2523, 2528, 2533, 2538, 2543, 2548, 
+        2553, 2558, 2573, 2578, 2588, 2593, 2603, 2608, 2613, 
+        2618, 2623, 2643, 
+    ])
+
+    start = program.clone()
+
+    for i in range(2000, 3000):
+        if i not in known_rooms:
+            # print("try", i)
+            program = start.clone()
+            program.memory[2732] = i
+            program.input_buffer = "look\n"
+            try:
+                val = program.run(abort_on_input=True, hide_output=True)
+                if val not in {"Unknown output character", "Halt instruction hit!"}:
+                    print(i, val)
+                    program.input_buffer = "look\n"
+                    program.run(abort_on_input=True)
+            except:
+                pass
+
+        # program.input_buffer = "look\n"
+        # program.run(abort_on_input=True)
+
 @opt("Run the program, with input")
 def run_input(filename):
     with zipfile.ZipFile(os.path.join("source", "challenge.zip"), 'r') as zip:
@@ -100,8 +138,9 @@ def run_input(filename):
 
     all_codes = _opcodes.copy()
     logger = Logger()
-    Program.set_logger(logger)
+    # Program.set_logger(logger)
     program = Program()
+    memory_log = {}
 
     with open(filename) as f:
         for cur in f:
@@ -112,7 +151,14 @@ def run_input(filename):
                 program.show(cur)
             elif cur.startswith("!"):
                 program.show(cur, input=True)
-                if cur.startswith("! reverse_mirror"):
+                if cur.startswith("! log_memory "):
+                    cur = cur[13:]
+                    memory_log[int(cur)] = -1
+                    program.show(f"Ok, memory log for {cur} enabled")
+                elif cur.startswith("! log_reads"):
+                    program.log_reads = True
+                    program.show(f"Ok, read log enabled")
+                elif cur.startswith("! reverse_mirror"):
                     for row in program.room[::-1]:
                         m = re.search("[ \"]([A-Za-z0-9]{12})[ \"]", row)
                         if m is not None:
@@ -165,6 +211,10 @@ def run_input(filename):
                     cur = cur[15:].split(' ')
                     program.registers[int(cur[0])-1] = int(cur[1])
                     program.show(f"Ok, register #{cur[0]} set to {cur[1]}")
+                elif cur.startswith("! set_memory "):
+                    cur = cur[13:].split(' ')
+                    program.memory[int(cur[0])] = int(cur[1])
+                    program.show(f"Ok, memory address {cur[0]} set to {cur[1]}")
                 elif cur.startswith("! op "):
                     cur = cur[5:].split(' ')
                     program.memory[int(cur[0])] = _opcodes['names'][cur[1]]
@@ -180,6 +230,11 @@ def run_input(filename):
             else:
                 program.input_buffer = cur + "\n"
                 program.run(abort_on_input=True)
+                for x in memory_log:
+                    if memory_log[x] != program.memory[x]:
+                        val = program.memory[x]
+                        program.show(f">> Memory {x} changed to {val}")
+                        memory_log[x] = val
 
     logger.finish()
                 

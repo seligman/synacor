@@ -3,6 +3,8 @@
 ## 2732 => 2317 != 2337, room?
 ## 2670 => 2317 != 0 tablet
 ## 2674 => 2357 != 0 lantern
+## 2678 => 32767 != 0 lantern (with oil)
+## 2682 => 32767 != 0 lantern (lit)
 ## 2686 => 2417 != 0 can
 ## 2690 => 2452 != 0 red coin
 ## 2694 => 2473 != 0 corroded coin
@@ -28,6 +30,7 @@
 
 # Now start the machine again, this time with all of the opcodes turned on
 ! opcodes all
+
 # This time when it's run, the bootup test sequence will reveal the third code 
 ! run
 

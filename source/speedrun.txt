@@ -1,0 +1,46 @@
+# A "speedrun" through this challenge
+# The first code is in the machine spec itself
+! type arch-spec:30,30
+
+# Running the machine now will reveal the second and third code
+! run
+
+take tablet
+# Using the tablet reveals the fourth code
+use tablet
+
+# Transport to before the sign
+! set_memory 2732 2402
+# This will show the fifth code
+north
+
+# Pick up the teleporter
+! set_memory 2710 0
+# Using the teleporter reveals the sixth code
+use teleporter
+
+# We still need to set the 8th register so the code is properly revealed, as the code uses this register
+! set_register 8 25734
+# ! set_register 1 5
+# Disable the jump to the confirmation process, it takes forever
+! no_op 5489
+# And the invert the logic of this jump, thus continuing as if the confirmation worked.
+! op 5495 jt
+# This will reveal the seventh code
+use teleporter
+
+# Pick up the mirror
+! set_memory 2722 0
+
+# These values are used during the maze and they're input to the mirror code
+! set_memory 3955 31318
+! set_memory 3956 9258
+! set_memory 3957 10600
+
+# And using the mirror shows the code
+use mirror
+
+# That code is reflected in a mirror, using a helper to decode it to reveal the final code
+! reverse_mirror
+# We're all done!
+! end
