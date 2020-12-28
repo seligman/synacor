@@ -1,0 +1,93 @@
+## TODO: Draw the room and items somehow
+### Memory addresses
+## 2732 => 2317 != 2337, room?
+## 2670 => 2317 != 0 tablet
+## 2674 => 2357 != 0 lantern
+## 2686 => 2417 != 0 can
+## 2690 => 2452 != 0 red coin
+## 2694 => 2473 != 0 corroded coin
+## 2698 => 2483 != 0 shiny coin
+## 2702 => 2468 != 0 concave coin
+## 2706 => 2478 != 0 blue coin
+## 2710 => 2463 != 0 teleporter
+## 2714 => 2488 != 0 business card
+## 2726 => 2488 != 0 strange book
+
+# The first code is in the machine spec itself
+# The second code is revealed during the bootup sequence, after op codes 0, 19 and 21 are implemented
+# The third code is revealed after the other op codes are tested
+take tablet
+# Using the tablet reveals the forth code
+use tablet
+doorway
+north
+north
+bridge
+continue
+down
+east
+take empty lantern
+west
+west
+passage
+ladder
+west
+south
+# This shows the fifth code in the ruins
+north
+take can
+use can
+use lantern
+west
+ladder
+darkness
+continue
+west
+west
+west
+west
+north
+take red coin
+north
+east
+take concave coin
+down
+take corroded coin
+up
+west
+west
+take blue coin
+up
+take shiny coin
+down
+east
+look blue coin
+look concave coin
+look corroded coin
+look red coin
+look shiny coin
+# The coins need to be added in the proper order, a helper here, called "solve_coins", picks the order
+use blue coin
+use red coin
+use shiny coin
+use concave coin
+use corroded coin
+north
+take teleporter
+# The teleporter shows the sixth code in the stars
+use teleporter
+look
+take business card
+look business card
+take strange book
+look strange book
+outside
+# The book mentions needing to set the 8th register to a value.  TODO in this project can be used to debug the code and find the target value.  Here it's being set with a backdoor to set the register
+! set_register 8 25734
+# Disable the jump to the confirmation process
+! no_op 5489
+# And the disable the jump if the results of the confirmation process are invalid
+! no_op 5495
+# This will reveal the seventh code
+use teleporter
+# TODO: Finish off with the maze

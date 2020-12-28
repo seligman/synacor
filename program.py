@@ -314,13 +314,12 @@ class Program:
         self.output_buffer = ""
         self.room = []
 
+        self.need_header = True
         self.save_state = None
         self.hide_output = False
+        self.log_all = False
         self.breakpoints = set()
         self.history = deque()
-
-        self.handle_io("----- Program Log for " + datetime.now().strftime("%Y-%m-%d %H:%M:%S") + " -----")
-        self.handle_io("")
 
     def clone(self):
         ret = Program()
@@ -364,6 +363,10 @@ class Program:
             zip.writestr('state.bin', b''.join(data.buffer))
 
     def handle_io(self, value):
+        if self.need_header:
+            self.need_header = False
+            self.handle_io("----- Program Log for " + datetime.now().strftime("%Y-%m-%d %H:%M:%S") + " -----")
+            self.handle_io("")
         with open("program.log", "a") as f:
             f.write(value + "\n")
 
@@ -383,23 +386,27 @@ class Program:
                 self.breakpoint()
             return self.registers[value - 32768]
 
+    def decode(self, pc):
+        if self.memory[pc] in _opcodes:
+            op = _opcodes[self.memory[pc]]
+            info = f"{pc:5d}: {op['name']:<4}"
+            pc += 1
+            for _ in range(op['size']-1):
+                if self.memory[pc] < 32768:
+                    info += f" {self.memory[pc]}"
+                else:
+                    info += f" [{self.memory[pc] - 32768}]"
+                pc += 1
+        else:
+            info = f"{pc:5d}: {self.memory[pc]}"
+            pc += 1
+        return pc, info
+
     def dump(self, filename):
         with open(filename, "w") as f:
             pc = 0
             while pc < len(self.memory):
-                if self.memory[pc] in _opcodes:
-                    op = _opcodes[self.memory[pc]]
-                    info = f"{pc:5d}: {op['name']:<4}"
-                    pc += 1
-                    for _ in range(op['size']-1):
-                        if self.memory[pc] < 32768:
-                            info += f" {self.memory[pc]}"
-                        else:
-                            info += f" [{self.memory[pc] - 32768}]"
-                        pc += 1
-                else:
-                    info = f"{pc:5d}: {self.memory[pc]}"
-                    pc += 1
+                pc, info = self.decode(pc)
                 f.write(info + "\n")
 
     def breakpoint(self):
@@ -421,7 +428,7 @@ class Program:
             else:
                 info = f"{pc:5d}: {self.memory[pc]}"
                 pc += 1
-            print(info)
+            pc, info = self.decode(pc)
 
     def set_val(self, dest, value):
         if dest < 32768:
@@ -435,6 +442,9 @@ class Program:
             while True:
                 if self.pc >= len(self.memory):
                     raise ProgramException("End of program")
+                if self.log_all:
+                    _, info = self.decode(self.pc)
+                    self.handle_io(info)
                 self.history.append(self.pc)
                 while len(self.history) > 5:
                     self.history.popleft()

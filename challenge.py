@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 from command_opts import opt, main_entry
-from program import Program
+from program import Program, _opcodes
 import zipfile
 import os
 import re
@@ -31,10 +31,13 @@ def run_mem():
                 if memory[i] != program.memory[i]:
                     print(f"{i} => {memory[i]} != {program.memory[i]}")
         temp = input("Step? ")
-        program.input_buffer += temp + "\n"
+        if temp == "reset":
+            memory = program.memory[:]
+        else:
+            program.input_buffer += temp + "\n"
 
 
-@opt("Run the program, showing memory changes")
+@opt("Run the program")
 def run():
     with zipfile.ZipFile(os.path.join("source", "challenge.zip"), 'r') as zip:
         machine = zip.read('challenge.bin')
@@ -42,6 +45,50 @@ def run():
     program.load_bytes(machine)
     program.run()
 
+
+@opt("Run the program, with input")
+def run_input(filename):
+    with zipfile.ZipFile(os.path.join("source", "challenge.zip"), 'r') as zip:
+        machine = zip.read('challenge.bin')
+    program = Program()
+    program.load_bytes(machine)
+
+    started = False
+
+    with open(filename) as f:
+        for cur in f:
+            cur = cur.strip()
+            if len(cur) == 0 or cur.startswith("##"):
+                pass
+            elif cur.startswith("#"):
+                program.handle_io(cur)
+            elif cur.startswith("!"):
+                print("+> " + cur)
+                program.handle_io("+> " + cur)
+                if cur.startswith("! set_register "):
+                    cur = cur[15:].split(' ')
+                    program.registers[int(cur[0])-1] = int(cur[1])
+                    msg = f"Ok, register #{cur[0]} set to {cur[1]}"
+                    print(msg)
+                    program.handle_io(msg)
+                elif cur.startswith("! no_op "):
+                    cur = int(cur[8:])
+                    num_to_set = _opcodes[program.memory[cur]]['size']
+                    for i in range(num_to_set):
+                        program.memory[cur + i] = 21
+                    msg = f"Ok, set {num_to_set} values starting at {cur} to noop"
+                    print(msg)
+                    program.handle_io(msg)
+                    # program.log_all = True
+                else:
+                    raise Exception()
+            else:
+                if not started:
+                    started = True
+                    program.run(abort_on_input=True)
+                program.input_buffer = cur + "\n"
+                program.run(abort_on_input=True)
+                
 
 @opt("Solve the vault")
 def vault():
@@ -86,6 +133,26 @@ def load(filename):
     program.load_bytes(machine)
     program.deserialize(filename)
     program.run()
+
+
+@opt("Solve the coin puzzle")
+def solve_coins():
+    # order = ['blue', 'red', 'shiny', 'concave', 'corroded']
+
+    coins = {
+        "blue": 9,
+        "concave": 7,
+        "corroded": 3,
+        "red": 2,
+        "shiny": 5,
+    }
+
+    import itertools
+    for order in itertools.permutations(coins):
+        value = coins[order[0]] + coins[order[1]] * coins[order[2]] ** 2 + coins[order[3]] ** 3 - coins[order[4]]
+        if value == 399:
+            print("order = " + json.dumps(order))
+            break
 
 
 @opt("Run the program, looking for events")
@@ -164,7 +231,8 @@ def auto():
 
                     for other in lists["other"]:
                         if len([x for x in inv if x.endswith("coin")]) == 5:
-                            order = ['blue', 'red', 'shiny', 'concave', 'corroded']
+                            # From solve_coins
+                            order = ["blue", "red", "shiny", "concave", "corroded"]
                             for test in order:
                                 test += " coin"
                                 inv.remove(test)
@@ -180,7 +248,7 @@ def auto():
                             print("-- Path --:")
                             for temp in path:
                                 print(temp)
-                            exit(0)
+                            exit(1)
                         inv.append(item)
                         path = path + ['take ' + item]
                         program.input_buffer += path[-1] + "\n"
@@ -205,6 +273,10 @@ def auto():
                     
                     for door in lists["door"]:
                         states.append((program.clone(), door, path[:], inv[:]))
+
+    print("--- All steps ---")
+    for cur in path:
+        print(cur)
 
     program.save_state.serialize(os.path.join('source', 'book.zip'))
 
