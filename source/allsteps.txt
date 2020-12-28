@@ -11,13 +11,28 @@
 ## 2706 => 2478 != 0 blue coin
 ## 2710 => 2463 != 0 teleporter
 ## 2714 => 2488 != 0 business card
+## 2718 => 2623 != 0 orb
+## 2722 => 2643 != 0 mirror
 ## 2726 => 2488 != 0 strange book
+## 2730 => 2553 != 0 journal
 
+# Welcome!  Lines like this are comments from me.
+# Input commands that start with a "!" are instructions for the interpreter
 # The first code is in the machine spec itself
-# The second code is revealed during the bootup sequence, after op codes 0, 19 and 21 are implemented
-# The third code is revealed after the other op codes are tested
+! type arch-spec:28,33
+
+# Before the main run, enable the op codes the instructions suggest
+! opcodes 0,19,21
+# Running the machine code with just these opcodes shows the second code
+! run
+
+# Now turn on all of the opcodes
+! opcodes all
+# This time when it's run, the bootup test sequence will reveal the third code 
+! run
+
 take tablet
-# Using the tablet reveals the forth code
+# Using the tablet reveals the fourth code
 use tablet
 doorway
 north
@@ -90,4 +105,47 @@ outside
 ! no_op 5495
 # This will reveal the seventh code
 use teleporter
-# TODO: Finish off with the maze
+
+north
+north
+north
+north
+north
+north
+north
+
+east
+take journal
+look journal
+west
+
+north
+north
+take orb
+
+# At this point we're entering a maze.  The "vaults" helper solves the maze and finds the following path to run through it
+
+north
+east
+east
+north
+west
+south
+east
+east
+west
+north
+north
+east
+
+vault
+take mirror
+use mirror
+
+# That code is reflected in a mirror, using a helper to decode it to reveal the eigth code
+
+! reverse_mirror
+
+# We're all done!
+
+! end

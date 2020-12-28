@@ -464,4 +464,5 @@ class Program:
             if not self.hide_output:
                 if len(self.output_buffer) > 0:
                     print("", flush=True)
-                print(f"Status: {msg.msg}")
+                print(f"ERROR: {msg.msg}")
+                self.handle_io(f"ERROR: {msg.msg}")

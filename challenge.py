@@ -6,7 +6,7 @@ import zipfile
 import os
 import re
 import json
-
+from collections import deque
 
 @opt("Run example program")
 def test():
@@ -16,11 +16,13 @@ def test():
 
 
 @opt("Run the program, showing memory changes")
-def run_mem():
+def run_mem(savedstate=""):
     with zipfile.ZipFile(os.path.join("source", "challenge.zip"), 'r') as zip:
         machine = zip.read('challenge.bin')
     program = Program()
     program.load_bytes(machine)
+    if len(savedstate):
+        program.deserialize(savedstate)
     memory = []
     while True:
         program.run(abort_on_input=True)
@@ -50,10 +52,9 @@ def run():
 def run_input(filename):
     with zipfile.ZipFile(os.path.join("source", "challenge.zip"), 'r') as zip:
         machine = zip.read('challenge.bin')
-    program = Program()
-    program.load_bytes(machine)
 
-    started = False
+    all_codes = _opcodes.copy()
+    program = Program()
 
     with open(filename) as f:
         for cur in f:
@@ -65,7 +66,47 @@ def run_input(filename):
             elif cur.startswith("!"):
                 print("+> " + cur)
                 program.handle_io("+> " + cur)
-                if cur.startswith("! set_register "):
+                if cur.startswith("! reverse_mirror"):
+                    for row in program.room[::-1]:
+                        m = re.search("[ \"]([A-Za-z0-9]{12})[ \"]", row)
+                        if m is not None:
+                            break
+                    code = m.group(1)[::-1]
+                    reflect = {
+                        "p": "q",
+                        "q": "p",
+                    }
+                    code = "".join([reflect.get(x, x) for x in code])
+                    msg = 'The code in the mirror is "' + code + '"'
+                    print(msg)
+                    program.handle_io(msg)
+                elif cur.startswith("! save"):
+                    program.save_state.serialize("saved.zip")
+                elif cur.startswith("! opcodes "):
+                    _opcodes.clear()
+                    cur = [x for x in cur[10:].split(",")]
+                    for op in all_codes:
+                        if str(op) in cur or "all" in cur:
+                            _opcodes[op] = all_codes[op]
+                    _opcodes['names'] = all_codes['names']
+                    msg = "Enabled opcodes: " + ", ".join(cur)
+                    print(msg)
+                    program.handle_io(msg)
+                elif cur == "! run":
+                    program = Program()
+                    program.need_header = False
+                    program.load_bytes(machine)
+                    program.run(abort_on_input=True)
+                elif cur == "! end":
+                    exit(0)
+                elif cur.startswith("! type "):
+                    m = re.search("(.*):(.*),(.*)", cur[7:])
+                    with open(os.path.join("source", m.group(1))) as f:
+                        lines = f.readlines()
+                        for i in range(int(m.group(2)) - 1, int(m.group(3))):
+                            print(lines[i])
+                            program.handle_io(lines[i])
+                elif cur.startswith("! set_register "):
                     cur = cur[15:].split(' ')
                     program.registers[int(cur[0])-1] = int(cur[1])
                     msg = f"Ok, register #{cur[0]} set to {cur[1]}"
@@ -83,47 +124,9 @@ def run_input(filename):
                 else:
                     raise Exception()
             else:
-                if not started:
-                    started = True
-                    program.run(abort_on_input=True)
                 program.input_buffer = cur + "\n"
                 program.run(abort_on_input=True)
                 
-
-@opt("Solve the vault")
-def vault():
-    grid = [
-        ["*", 8, "-", 1],
-        [4, "*", 11, "*"],
-        ["+", 4, "-", 18],
-        [None, "-", 9, "*"],
-    ]
-
-    from collections import deque
-    todo = deque([(0, 3, [], 22, None)])
-    while len(todo) > 0:
-        x, y, steps, val, op = todo.popleft()
-        temp = grid[y][x]
-        if isinstance(temp, int):
-            if op == "+":
-                val = val + temp
-            elif op == "-":
-                val = val - temp
-            elif op == "*":
-                val = val * temp
-            op = None
-        else:
-            op = temp
-        if (x, y) == (3, 0):
-            if val == 30:
-                print(steps, val)
-                break
-        else:
-            for xo, yo, dir in [(0, -1, "n"), (0, 1, "s"), (-1, 0, "w"), (1, 0, "e")]:
-                xt, yt = x + xo, y + yo
-                if xt >= 0 and yt >= 0 and xt < 4 and yt < 4:
-                    todo.append((xt, yt, steps[:] + [dir], val, op))
-
 
 @opt("Run the program from a saved state")
 def load(filename):
@@ -154,14 +157,102 @@ def solve_coins():
             print("order = " + json.dumps(order))
             break
 
+@opt("Find layout of vault rooms")
+def vaults():
+    with zipfile.ZipFile(os.path.join("source", "challenge.zip"), 'r') as zip:
+        machine = zip.read('challenge.bin')
+    rooms = []
+    ids = set()
+    for cur in os.listdir("."):
+        if cur.startswith("room_") and cur.endswith(".zip"):
+            rooms.append({
+                "id": int(cur[5:-4]),
+                "name": cur,
+                "connections": [],
+                'oper': '',
+                'special': '',
+            })
+            ids.add(int(cur[5:-4]))
+    
+    target = 0
+    for room in rooms:
+        program = Program()
+        program.load_bytes(machine)
+        program.deserialize(room['name'])
+        program.run(abort_on_input=True, hide_output=True)
+        program.room = []
+        program.input_buffer = "look\n"
+        program.run(abort_on_input=True, hide_output=True)
+        steps = []
+        for cur in program.room:
+            m = re.search("The floor of this room is a large mosaic depicting a '(.*)' symbol.", cur)
+            if m is not None:
+                room['oper'] = m.group(1)
+            m = re.search("The floor of this room is a large mosaic depicting the number '([0-9]+)'.", cur)
+            if m is not None:
+                room['oper'] = m.group(1)
+            m = re.search("You notice the number '([0-9]+)' is carved", cur)
+            if m is not None:
+                room['oper'] = m.group(1)
+            m = re.search("it has a large '([0-9]+)' carved into it", cur)
+            if m is not None:
+                target = int(m.group(1))
+            if cur.startswith("- "):
+                steps.append(cur[2:])
+            if cur == "== Vault Antechamber ==":
+                room['special'] = 'start'
+            if cur == "== Vault Door ==":
+                room['special'] = 'end'
+        for step in steps:
+            program.deserialize(room['name'])
+            program.input_buffer = step + "\n"
+            program.run(abort_on_input=True, hide_output=True)
+            if program.memory[2732] in ids and program.memory[2732] != room['id']:
+                room['connections'].append((step, program.memory[2732]))
+
+    temp = rooms
+    rooms = {}
+    start, end = 0, 0
+    for room in temp:
+        rooms[room['id']] = room
+        if room['special'] == 'start':
+            start = room['id']
+        if room['special'] == 'end':
+            end = room['id']
+
+    steps = deque([(start, [], [0, '+'])])
+    while len(steps) > 0:
+        room, path, val = steps.popleft()
+        val.append(rooms[room]['oper'])
+        if len(val) == 3:
+            if val[1] == "+":
+                val = [val[0] + int(val[2])]
+            elif val[1] == "-":
+                val = [val[0] - int(val[2])]
+            elif val[1] == "*":
+                val = [val[0] * int(val[2])]
+            else:
+                raise Exception(val)
+        if room == end:
+            if target == val[0]:
+                for cur in path:
+                    print(cur)
+                steps = []
+        else:
+            for dir, sub in rooms[room]['connections']:
+                if sub != start:
+                    steps.append((sub, path[:] + [dir], val[:]))
+
 
 @opt("Run the program, looking for events")
-def auto():
+def auto(state=""):
     with zipfile.ZipFile(os.path.join("source", "challenge.zip"), 'r') as zip:
         machine = zip.read('challenge.bin')
     program = Program()
     program.load_bytes(machine)
-    program.deserialize(os.path.join("source", "start_state.zip"))
+    if len(state) == 0:
+        state = os.path.join("source", "start_state.zip")
+    program.deserialize(state)
 
     ignore = set([
         'The passage to the east looks very dark; you think you hear a Grue.',
@@ -169,6 +260,7 @@ def auto():
         'emBLbWMgDhds',
         '\n\nThat door is locked.\n\nWhat do you do?',
         '\n\nYou have been eaten by a grue.',
+        "\n\nThe vault door is sealed.\n\nWhat do you do?",
     ])
 
     states = [(program.clone(), None, [], [])]
@@ -191,17 +283,20 @@ def auto():
             else:
                 room = m.group("other")
 
+        room = re.sub("^\n\nAs you (approach the vault door|(enter|leave) the room).*?\n", "\n", room, flags=re.DOTALL)
+        room = re.sub("^\n\nAs you (approach the vault door|(enter|leave) the room).*?\n", "\n", room, flags=re.DOTALL)
+
         if room not in ignore:
             m = re.search("^\n\n(?P<room>== .*? ==\n.*?)\n\n(?P<other>.*)\n\nWhat do you do\\?$", room, flags=re.DOTALL)
             if m is None:
                 program.serialize("temp.zip")
-                print("Room with odd description: '" + room.replace("\n", "\\n") + "'")
+                print("Room with odd description: " + json.dumps(room))
                 exit(1)
             else:
                 room, other = m.group("room"), m.group("other")
                 mem = ""
                 for key, value in program.changed.items():
-                    if key < 5000:
+                    if key < 3000:
                         mem += f"{key},{value}|"
                 if mem not in seen:
                     seen.add(mem)
@@ -224,8 +319,17 @@ def auto():
                         elif re.search('[0-9_]+ \\+ [0-9_]+ \\* [0-9_]+\\^2 \\+ [0-9_]+\\^3 \\- [0-9_]+ = 399', cur):
                             lists["other"].append(cur)
                         else:
-                            if cur not in ignore:
-                                print("Unknown line of desc: '" + cur.replace("\n", "\\n") + "'")
+                            known = False
+                            if cur in ignore:
+                                known = True
+                            if not known:
+                                if re.search("The floor of this room is a large mosaic depicting a '(.*)' symbol.", cur):
+                                    known = True
+                            if not known:
+                                if re.search("The floor of this room is a large mosaic depicting the number '([0-9]+)'.", cur):
+                                    known = True
+                            if not known:
+                                print("Unknown line of desc: " + json.dumps(cur))
                                 print("Inventory: ", inv)
                                 exit(1)
 
@@ -242,7 +346,7 @@ def auto():
                             lists['door'] = ["look"] + lists['door']
 
                     for item in lists["item"]:
-                        if item not in {"empty lantern", "can", "teleporter", 'business card', 'strange book'} and not item.endswith("coin"):
+                        if item not in {"empty lantern", "can", "teleporter", 'business card', 'strange book', 'journal', 'orb'} and not item.endswith("coin"):
                             print(item)
                             print(inv)
                             print("-- Path --:")
@@ -271,6 +375,8 @@ def auto():
                             states = []
                             lists['door'] = ['look']
                     
+                    if "== Vault" in room:
+                        program.save_state.serialize("room_" + str(program.memory[2732]) + ".zip")
                     for door in lists["door"]:
                         states.append((program.clone(), door, path[:], inv[:]))
 
