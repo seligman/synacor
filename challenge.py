@@ -48,12 +48,59 @@ def run():
     program.run()
 
 
+class Logger:
+    def __init__(self):
+        self.state = ""
+        self.msgs = []
+        self.last_register = {}
+        self.last_memory = {}
+        self.track = {
+            2732, 2670, 2674, 2686, 2690, 2694, 
+            2698, 2702, 2706, 2710, 2714, 2718, 
+            2722, 2726, 2730,
+        }
+
+    def handle_memory(self, program):
+        for i in range(len(program.registers)):
+            if self.last_register.get(i, -1) != program.registers[i]:
+                self.add_message("register", f"{i}={program.registers[i]}")
+                self.last_register[i] = program.registers[i]
+        for cur in self.track:
+            if cur < len(program.memory):
+                if self.last_memory.get(cur, -1) != program.memory[cur]:
+                    self.add_message("memory", f"{cur}={program.memory[cur]}")
+                    self.last_memory[cur] = program.memory[cur]
+
+    def add_message(self, state, msg):
+        if self.state != state:
+            self.finish()
+        self.state = state
+        self.msgs.append(msg)
+
+    def handle_input(self, program, value):
+        self.handle_memory(program)
+        self.add_message("input", value)
+
+    def handle_output(self, program, value):
+        self.handle_memory(program)
+        self.add_message("output", value)
+
+    def finish(self):
+        if len(self.msgs) > 0:
+            with open("program_activity.jsonl", "a", newline='') as f:
+                row = {"state": self.state, "msgs": self.msgs}
+                f.write(json.dumps(row) + "\n")
+            self.state = ''
+            self.msgs = []
+
 @opt("Run the program, with input")
 def run_input(filename):
     with zipfile.ZipFile(os.path.join("source", "challenge.zip"), 'r') as zip:
         machine = zip.read('challenge.bin')
 
     all_codes = _opcodes.copy()
+    logger = Logger()
+    Program.set_logger(logger)
     program = Program()
 
     with open(filename) as f:
@@ -62,10 +109,9 @@ def run_input(filename):
             if len(cur) == 0 or cur.startswith("##"):
                 pass
             elif cur.startswith("#"):
-                program.handle_io(cur)
+                program.show(cur)
             elif cur.startswith("!"):
-                print("+> " + cur)
-                program.handle_io("+> " + cur)
+                program.show(cur, input=True)
                 if cur.startswith("! reverse_mirror"):
                     for row in program.room[::-1]:
                         m = re.search("[ \"]([A-Za-z0-9]{12})[ \"]", row)
@@ -77,11 +123,10 @@ def run_input(filename):
                         "q": "p",
                     }
                     code = "".join([reflect.get(x, x) for x in code])
-                    msg = 'The code in the mirror is "' + code + '"'
-                    print(msg)
-                    program.handle_io(msg)
+                    program.show('The code in the mirror is "' + code + '"')
                 elif cur.startswith("! save"):
                     program.save_state.serialize("saved.zip")
+                    program.show("State saved to 'saved.zip'")
                 elif cur.startswith("! opcodes "):
                     _opcodes.clear()
                     cur = [x for x in cur[10:].split(",")]
@@ -89,43 +134,54 @@ def run_input(filename):
                         if str(op) in cur or "all" in cur:
                             _opcodes[op] = all_codes[op]
                     _opcodes['names'] = all_codes['names']
-                    msg = "Enabled opcodes: " + ", ".join(cur)
-                    print(msg)
-                    program.handle_io(msg)
+                    program.show("Enabled opcodes: " + ", ".join(cur))
                 elif cur == "! run":
                     program = Program()
                     program.need_header = False
                     program.load_bytes(machine)
                     program.run(abort_on_input=True)
                 elif cur == "! end":
+                    program.show("Goodbye!")
+                    logger.finish()
                     exit(0)
                 elif cur.startswith("! type "):
                     m = re.search("(.*):(.*),(.*)", cur[7:])
                     with open(os.path.join("source", m.group(1))) as f:
                         lines = f.readlines()
                         for i in range(int(m.group(2)) - 1, int(m.group(3))):
-                            print(lines[i])
-                            program.handle_io(lines[i])
+                            program.show(lines[i])
+                elif cur.startswith("! decompile "):
+                    cur = [int(x) for x in cur[12:].split(' ')]
+                    pc = 0
+                    program.show(f"Decompiling from {cur[0]} to {cur[1]}:")
+                    while pc < len(program.memory):
+                        next_pc, info = program.decode(pc)
+                        if pc >= cur[0]:
+                            program.show(info)
+                        if next_pc > cur[1]:
+                            break
+                        pc = next_pc
                 elif cur.startswith("! set_register "):
                     cur = cur[15:].split(' ')
                     program.registers[int(cur[0])-1] = int(cur[1])
-                    msg = f"Ok, register #{cur[0]} set to {cur[1]}"
-                    print(msg)
-                    program.handle_io(msg)
+                    program.show(f"Ok, register #{cur[0]} set to {cur[1]}")
+                elif cur.startswith("! op "):
+                    cur = cur[5:].split(' ')
+                    program.memory[int(cur[0])] = _opcodes['names'][cur[1]]
+                    program.show(f"Ok, set {cur[0]} to {cur[1]}")
                 elif cur.startswith("! no_op "):
                     cur = int(cur[8:])
                     num_to_set = _opcodes[program.memory[cur]]['size']
                     for i in range(num_to_set):
                         program.memory[cur + i] = 21
-                    msg = f"Ok, set {num_to_set} values starting at {cur} to noop"
-                    print(msg)
-                    program.handle_io(msg)
-                    # program.log_all = True
+                    program.show(f"Ok, set {num_to_set} values starting at {cur} to noop")
                 else:
                     raise Exception()
             else:
                 program.input_buffer = cur + "\n"
                 program.run(abort_on_input=True)
+
+    logger.finish()
                 
 
 @opt("Run the program from a saved state")
@@ -156,6 +212,37 @@ def solve_coins():
         if value == 399:
             print("order = " + json.dumps(order))
             break
+
+
+@opt("Find the target energy level")
+def energy_level():
+    def pow(base, exp, div):
+        ret = 1
+        for _ in range(exp):
+            ret = (ret * base) % div
+        return ret
+
+    def f3(b, r8):
+        d1 = pow(r8 + 1, b, 0x8000)
+        d2 = pow(r8 + 1, b, r8 * 0x8000)
+        d2 -= 1
+        if d2 == -1:
+            d2 = r8 - 1
+
+        ret = d1 * ((r8 + 1) * (r8 + 1) + r8) + d2 // r8 * (2 * r8 + 1)
+        return ret & 0x7fff
+
+    def f41(r8):
+        return f3(f3(r8, r8), r8)
+
+    for i in range(1, 32879):
+        result = f41(i)
+        if i % 500 == 0:
+            print(f"r8 = {i:5d}, f(4, 1) => {result}")
+        if result == 6:
+            print(f"The target is {i}")
+            break
+
 
 @opt("Find layout of vault rooms")
 def vaults():

@@ -7,6 +7,7 @@ from inspect import signature
 import zipfile
 
 _opcodes = {"names": {}}
+_io_logger = None
 
 
 def opcode(name, opcode_num):
@@ -76,6 +77,8 @@ def op_out(program, value):
         if program.output_buffer == "":
             program.breakpoint()
     value = program.get_val(value)
+    if _io_logger:
+        _io_logger.handle_output(program, chr(value))
     if value < 32 and value != ord('\n'):
         value = "\\x%02X" % (value,)
     else:
@@ -157,6 +160,8 @@ def op_in(program, dest):
     else:
         program.input_buffer_echo += program.input_buffer[0]
 
+    if _io_logger:
+        _io_logger.handle_input(program, program.input_buffer[0])
     program.set_val(dest, ord(program.input_buffer[0]))
     program.input_buffer = program.input_buffer[1:]
 
@@ -303,6 +308,11 @@ class Serialize:
 
 
 class Program:
+    @staticmethod
+    def set_logger(logger):
+        global _io_logger
+        _io_logger = logger
+
     def __init__(self):
         self.pc = 0
         self.memory = []
@@ -369,6 +379,15 @@ class Program:
             self.handle_io("")
         with open("program.log", "a") as f:
             f.write(value + "\n")
+
+    def show(self, value, input=False):
+        if _io_logger:
+            if input:
+                [_io_logger.handle_input(self, x) for x in value]
+            else:
+                [_io_logger.handle_output(self, x) for x in value]
+        print(value)
+        self.handle_io(value)
 
     def load_string(self, value):
         self.memory = [int(x) for x in value.split(',')]

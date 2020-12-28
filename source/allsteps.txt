@@ -21,12 +21,12 @@
 # The first code is in the machine spec itself
 ! type arch-spec:28,33
 
-# Before the main run, enable the op codes the instructions suggest
+# Start a test run, with just the first opcodes the hint suggests
 ! opcodes 0,19,21
-# Running the machine code with just these opcodes shows the second code
+# Running the machine now will reveal the second code
 ! run
 
-# Now turn on all of the opcodes
+# Now start the machine again, this time with all of the opcodes turned on
 ! opcodes all
 # This time when it's run, the bootup test sequence will reveal the third code 
 ! run
@@ -48,6 +48,7 @@ passage
 ladder
 west
 south
+
 # This shows the fifth code in the ruins
 north
 take can
@@ -81,6 +82,7 @@ look concave coin
 look corroded coin
 look red coin
 look shiny coin
+
 # The coins need to be added in the proper order, a helper here, called "solve_coins", picks the order
 use blue coin
 use red coin
@@ -89,20 +91,28 @@ use concave coin
 use corroded coin
 north
 take teleporter
+
 # The teleporter shows the sixth code in the stars
 use teleporter
-look
 take business card
 look business card
 take strange book
 look strange book
-outside
-# The book mentions needing to set the 8th register to a value.  TODO in this project can be used to debug the code and find the target value.  Here it's being set with a backdoor to set the register
+
+# The book mentions needing to set the 8th register to a value and run a long running confirmation process.
+# After a bit of debugging, that process is located here:
+! decompile 6027 6067
+
+# "energy_level" in this project is an implementation of this, showing which value of the eigth register will result in a correct value.  Here it's being set with a backdoor to set the register
 ! set_register 8 25734
-# Disable the jump to the confirmation process
+# ! set_register 1 5
+
+# Disable the jump to the confirmation process, it takes forever
 ! no_op 5489
-# And the disable the jump if the results of the confirmation process are invalid
-! no_op 5495
+
+# And the invert the logic of this jump, thus continuing as if the confirmation worked.
+! op 5495 jt
+
 # This will reveal the seventh code
 use teleporter
 
@@ -124,7 +134,6 @@ north
 take orb
 
 # At this point we're entering a maze.  The "vaults" helper solves the maze and finds the following path to run through it
-
 north
 east
 east
@@ -142,7 +151,7 @@ vault
 take mirror
 use mirror
 
-# That code is reflected in a mirror, using a helper to decode it to reveal the eigth code
+# That code is reflected in a mirror, using a helper to decode it to reveal the final code
 
 ! reverse_mirror
 
