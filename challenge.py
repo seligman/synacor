@@ -21,6 +21,7 @@ def run_mem(savedstate=""):
         machine = zip.read('challenge.bin')
     program = Program()
     program.load_bytes(machine)
+    show_all = False
     if len(savedstate):
         program.deserialize(savedstate)
     memory = []
@@ -31,9 +32,18 @@ def run_mem(savedstate=""):
         else:
             for i in range(len(memory)):
                 if memory[i] != program.memory[i]:
-                    print(f"{i} => {memory[i]} != {program.memory[i]}")
+                    if show_all or i == 2732:
+                        print(f"{i} => {memory[i]} != {program.memory[i]}")
         temp = input("Step? ")
-        if temp == "reset":
+        if temp.startswith("all"):
+            show_all = not show_all
+        elif temp.startswith("room "):
+            temp = temp[4:]
+            program.memory[2732] = int(temp)
+        elif temp.startswith("mem "):
+            temp = temp[4:].split(' ')
+            program.memory[int(temp[0])] = int(temp[1])
+        elif temp == "reset":
             memory = program.memory[:]
         else:
             program.input_buffer += temp + "\n"
@@ -93,6 +103,7 @@ class Logger:
             self.state = ''
             self.msgs = []
 
+
 @opt("Find all rooms")
 def find_rooms():
     with zipfile.ZipFile(os.path.join("source", "challenge.zip"), 'r') as zip:
@@ -109,13 +120,15 @@ def find_rooms():
         2488, 2498, 2513, 2523, 2528, 2533, 2538, 2543, 2548, 
         2553, 2558, 2573, 2578, 2588, 2593, 2603, 2608, 2613, 
         2618, 2623, 2643, 
+        2322, 2382, 2387, 2392, 2407, 2412, 2422, 2493, 2503, 
+        2508, 2518, 2563, 2568, 2583, 2598, 2628, 2633, 2638, 
+        2648, 2653, 2658, 
     ])
 
     start = program.clone()
 
     for i in range(2000, 3000):
         if i not in known_rooms:
-            # print("try", i)
             program = start.clone()
             program.memory[2732] = i
             program.input_buffer = "look\n"
@@ -128,17 +141,17 @@ def find_rooms():
             except:
                 pass
 
-        # program.input_buffer = "look\n"
-        # program.run(abort_on_input=True)
 
 @opt("Run the program, with input")
-def run_input(filename):
+def run_input(filename, log_all="no"):
+    log_all = log_all.lower() in {"yes", "y", "true"}
     with zipfile.ZipFile(os.path.join("source", "challenge.zip"), 'r') as zip:
         machine = zip.read('challenge.bin')
 
     all_codes = _opcodes.copy()
     logger = Logger()
-    # Program.set_logger(logger)
+    if log_all:
+        Program.set_logger(logger)
     program = Program()
     memory_log = {}
 
@@ -251,8 +264,6 @@ def load(filename):
 
 @opt("Solve the coin puzzle")
 def solve_coins():
-    # order = ['blue', 'red', 'shiny', 'concave', 'corroded']
-
     coins = {
         "blue": 9,
         "concave": 7,
@@ -297,6 +308,79 @@ def energy_level():
         if result == 6:
             print(f"The target is {i}")
             break
+
+
+@opt("Find map of rooms")
+def maps():
+    with zipfile.ZipFile(os.path.join("source", "challenge.zip"), 'r') as zip:
+        machine = zip.read('challenge.bin')
+
+    todo = [2317]
+    todo = [2488]
+    todo = [2498]
+
+    starts = [
+        {'name': 'start', 'room': 2317, 'lantern': False},
+        {'name': 'start_lantern', 'room': 2317, 'lantern': True},
+        {'name': 'hq', 'room': 2488, 'lantern': False},
+        {'name': 'island', 'room': 2498, 'lantern': False},
+    ]
+
+    for start in starts:
+        rooms = {}
+        todo = [start['room']]
+        while len(todo) > 0:
+            room = todo.pop(0)
+            rooms[room] = {
+                'id': room,
+                'connections': [],
+                'name': ''
+            }
+            program = Program()
+            program.load_bytes(machine)
+            program.deserialize(os.path.join("source", "start_state.zip"))
+            program.memory[2732] = room
+            if start['lantern']:
+                program.memory[2682] = 0
+            program.run(abort_on_input=True, hide_output=True)
+            program.room = []
+            program.input_buffer = "look\n"
+            program.run(abort_on_input=True, hide_output=True)
+
+            left = 0
+            for cur in program.room:
+                m = re.search("== (.*) ==", cur)
+                if m is not None:
+                    rooms[room]['name'] = m.group(1)
+                m = re.search("There (are|is) ([0-9]+) exits{0,1}:", cur)
+                if m is not None:
+                    left = int(m.group(2))
+                if left > 0 and cur.startswith("- "):
+                    left -= 1
+                    rooms[room]['connections'].append([cur[2:], -1])
+            temp = program.clone()
+            for i in range(len(rooms[room]['connections'])):
+                program = temp.clone()
+                program.input_buffer = rooms[room]['connections'][i][0] + "\n"
+                program.run(abort_on_input=True, hide_output=True)
+                rooms[room]['connections'][i][1] = program.memory[2732]
+                if rooms[room]['connections'][i][1] not in rooms:
+                    rooms[rooms[room]['connections'][i][1]] = None
+                    todo.append(rooms[room]['connections'][i][1])
+
+        import csv
+        edge = 0
+        with open("edges_" + start['name'] + ".csv", "w", newline='') as f_edges:
+            cw_edges = csv.writer(f_edges)
+            cw_edges.writerow(['id', 'source', 'source_name', 'dest', 'dest_name', 'dir'])
+
+            for room in rooms.values():
+                # cw_nodes.writerow(["node" + str(room['id']), room['name']])
+                for dir, other in room['connections']:
+                    edge += 1
+                    cw_edges.writerow(["edge" + str(edge), "node" + str(room['id']), room['name'], "node" + str(other), rooms[other]['name'], dir])
+
+        print("Done with " + start['name'])
 
 
 @opt("Find layout of vault rooms")
