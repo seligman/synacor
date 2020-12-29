@@ -393,9 +393,9 @@ class Program:
     def show(self, value, input=False):
         if _io_logger:
             if input:
-                [_io_logger.handle_input(self, x) for x in value]
+                [_io_logger.handle_input(self, x) for x in value + "\n"]
             else:
-                [_io_logger.handle_output(self, x) for x in value]
+                [_io_logger.handle_output(self, x) for x in value + "\n"]
         print(value)
         self.handle_io(value)
 

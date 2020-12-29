@@ -4,32 +4,12 @@
 <meta charset="utf-8"/>
 <title>Synacor Challenge</title>
 <!-- <link href='//fonts.googleapis.com/css?family=Source+Code+Pro:300&subset=latin,latin-ext' rel='stylesheet' type='text/css'/> -->
+<script src="script.js"></script>
 <script>
-var script = '';
-script += '# Welcome!  Lines like this are comments from me.\n';
-script += '# Input commands that start with a "!" are instructions for the interpreter\n';
-script += '\n';
-script += 'There are 2 exits:\n';
-script += '- doorway\n';
-script += '- south\n';
-script += '\n';
-script += 'What do you do? ~minput~use tablet\n';
-script += '~moutput~\n';
-script += 'ok, tablet used\n';
-script += '\n';
-script += '# Welcome!  Lines like this are comments from me.\n';
-script += '# Input commands that start with a "!" are instructions for the interpreter\n';
-script += '\n';
-script += '\n';
-script += 'There are 2 exits:\n';
-script += '- doorway\n';
-script += '- south\n';
-script += '\n';
-script += 'What do you do? ~minput~use tablet\n';
-script += '~moutput~\n';
-script += 'ok, tablet used\n';
 
 var rmode = /^~m(.*?)~/;
+var rreg = /^~r(.)(.*?)~/;
+var rmem = /^~v(....)(.*?)~/;
 var speed = 0;
 var bail = 0;
 
@@ -48,16 +28,57 @@ function tick() {
                 var m = rmode.exec(script);
                 if (m) {
                     used = true;
+                    script = script.slice(m[0].length);
                     ticker_at.id = "";
                     ticker.innerHTML += '<span class="' + m[1] + '" id="ticker_at">';
                     ticker_at = document.getElementById('ticker_at');
-                    script = script.slice(m[0].length);
                     if (m[1] == "input") {
                         speed = 1;
                         bail = 50;
                     } else {
                         speed = 0;
                     }
+                }
+            }
+            if (!used) {
+                var m = rreg.exec(script);
+                if (m) {
+                    used = true;
+                    script = script.slice(m[0].length);
+                    var reg = document.getElementById("reg_" + m[1]);
+                    reg.innerHTML = m[2];
+                }
+            }
+            if (!used) {
+                var m = rmem.exec(script);
+                if (m) {
+                    used = true;
+                    script = script.slice(m[0].length);
+                    if (m[1] == "2732") {
+                        document.getElementById("room").innerHTML = m[2];
+                    } else {
+                        var x = m[1];
+                        var y = '';
+                        if (x == "2674") {
+                            y = "lantern";
+                        } else if (x == "2678") {
+                            x = "2674";
+                            y = "lantern (oil)";
+                        } else if (x == "2682") {
+                            x = "2674";
+                            y = "lantern (lit)";
+                        }
+                        if (m[2] == "0") {
+                            document.getElementById("item_" + x).className = "item";
+                            if (y.length > 0) {
+                                document.getElementById("item_" + x).innerHTML = y;
+                            }
+                        } else {
+                            document.getElementById("item_" + x).className = "item_not";
+                        }
+                    }
+                    var reg = document.getElementById("reg_" + m[1]);
+                    reg.innerHTML = m[2];
                 }
             }
             if (!used) {
@@ -77,24 +98,26 @@ window.onload = function() {
 </script>
 <style>
 body {
-    background: #0f0f23; /*337 x 5*/
+    background: #0f0f23;
     color: #cccccc;
     font-family: "Source Code Pro", monospace;
     font-size: 14pt;
     min-width: 60em;
 }
 .console {
-    width: 500px; height: 500px;position:relative;
-    /* width: 200px;
-    height: 100px; */
+    width: 50em; 
+    height: 30em;
+    position: relative;
+    padding: 1em;
+    background-color:#000010;
 }
 .console div {
     max-height:100%;overflow:auto;
-    -ms-overflow-style: none;  /* Internet Explorer 10+ */
-    scrollbar-width: none;  /* Firefox */
+    -ms-overflow-style: none;
+    scrollbar-width: none;
 }
 .console div::-webkit-scrollbar { 
-    display: none;  /* Safari and Chrome */
+    display: none;
 }
 .console div div {
     overflow: hidden;
@@ -107,42 +130,50 @@ pre {
     word-wrap: break-word;
 }
 .item {
-    color: red;
-    width: 200px
+    color: #8080ff;
+    width: 10em;
 }
 .item_not {
-    color: blue;
-    width: 200px
+    color: #404040;
+    width: 10em;
 }
 .reg {
-    width: 200px;
+    width: 10em;
 }
 .comment {
     color:red;
 }
 .input {
-    color:blue;
+    color:#20f0f0;
 }
 .output {
-    color:yellow;
+    color:#20f020;
+}
+.code {
+    color:#ffffff;
+    text-shadow: 1px 0px 20px #ffffff;
+    font-weight: bold;
+}
+.cursor {
+    background-color: white;
 }
 </style>
 </head>
 <body>
-<table border="1">
+<table>
 <tbody>
 <tr>
-<td rowspan="16" valign="top">
+<td rowspan="17" valign="top">
 <div class="console"><div id="console_scroll"><div>
-<pre id='ticker'><span id="ticker_at" class="output"></span></pre>
+<pre><span id='ticker'><span id="ticker_at" class="output"></span></span><span class="cursor">&nbsp;</span></pre>
 </div></div></div>
 </td>
-<td colspan="2">Room ID: <span id="room">1234</span></td>
+<td colspan="2">Room ID: <span id="room">----</span></td>
 </tr>
 <tr><td>Items</td><td>Registers</td></tr>
 <tr><td><div id="item_2670" class="item_not">tablet</div></td><td><div class="reg">1: <span id="reg_0">0</span></div></td></tr>
 <tr><td><div id="item_2674" class="item_not">lantern</div></td><td><div class="reg">2: <span id="reg_1">0</span></div></td></tr>
-<tr><td><div id="item_2686" class="item">can</div></td><td><div class="reg">3: <span id="reg_2">0</span></div></td></tr>
+<tr><td><div id="item_2686" class="item_not">can</div></td><td><div class="reg">3: <span id="reg_2">0</span></div></td></tr>
 <tr><td><div id="item_2690" class="item_not">red coin</div></td><td><div class="reg">4: <span id="reg_3">0</span></div></td></tr>
 <tr><td><div id="item_2694" class="item_not">corroded coin</div></td><td><div class="reg">5: <span id="reg_4">0</span></div></td></tr>
 <tr><td><div id="item_2698" class="item_not">shiny coin</div></td><td><div class="reg">6: <span id="reg_5">0</span></div></td></tr>
@@ -154,6 +185,7 @@ pre {
 <tr><td><div id="item_2722" class="item_not">mirror</div></td></tr>
 <tr><td><div id="item_2726" class="item_not">strange book</div></td></tr>
 <tr><td><div id="item_2730" class="item_not">journal</div></td></tr>
+<tr><td style="height:100%"></td></tr>
 </table>
 </body>
 </html>

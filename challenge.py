@@ -60,32 +60,49 @@ def run():
 
 class Logger:
     def __init__(self):
-        self.state = ""
-        self.msgs = []
+        self.state = "output"
+        self.script = []
         self.last_register = {}
         self.last_memory = {}
         self.track = {
-            2732, 2670, 2674, 2686, 2690, 2694, 
-            2698, 2702, 2706, 2710, 2714, 2718, 
-            2722, 2726, 2730,
+            2732, 2670, 2674, 2678, 2682, 2686, 
+            2690, 2694, 2698, 2702, 2706, 2710, 
+            2714, 2718, 2722, 2726, 2730, 
         }
+        self.codes = set([
+            'fbCcIPhFoGGd',
+            'KtYzSlsHSBIz',
+            'oNTFmoiTRTMG',
+            'MBTdGgundHQG',
+            'emBLbWMgDhds',
+            'ipMlgrgDybOZ',
+            'SlpnGuEnfhcE',
+            'YOUlUoXioTpY',
+        ])
+
+    def add(self, value):
+        self.script.append(value)
 
     def handle_memory(self, program):
         for i in range(len(program.registers)):
             if self.last_register.get(i, -1) != program.registers[i]:
-                self.add_message("register", f"{i}={program.registers[i]}")
+                self.add(f"~r{i}{program.registers[i]}~")
                 self.last_register[i] = program.registers[i]
         for cur in self.track:
             if cur < len(program.memory):
                 if self.last_memory.get(cur, -1) != program.memory[cur]:
-                    self.add_message("memory", f"{cur}={program.memory[cur]}")
+                    self.add(f"~v{cur}{program.memory[cur]}~")
                     self.last_memory[cur] = program.memory[cur]
 
-    def add_message(self, state, msg):
+    def add_message(self, state, value):
         if self.state != state:
-            self.finish()
-        self.state = state
-        self.msgs.append(msg)
+            self.add(f"~m{state}~")
+            self.state = state
+        if value == "'":
+            value = "\\'"
+        elif value == "\n":
+            value = "\\n"
+        self.add(value)
 
     def handle_input(self, program, value):
         self.handle_memory(program)
@@ -96,12 +113,35 @@ class Logger:
         self.add_message("output", value)
 
     def finish(self):
-        if len(self.msgs) > 0:
-            with open("program_activity.jsonl", "a", newline='') as f:
-                row = {"state": self.state, "msgs": self.msgs}
-                f.write(json.dumps(row) + "\n")
-            self.state = ''
-            self.msgs = []
+        if self.script is not None:
+            found = True
+            while found:
+                found = False
+                digits = []
+                for i in range(len(self.script)):
+                    if self.script[i][0] != "~":
+                        digits.append((self.script[i], i))
+                    digits = digits[-12:]
+                    if "".join([x[0] for x in digits]) in self.codes:
+                        x = "".join([x[0] for x in digits])
+                        found = True
+                        print(x)
+                        self.codes.remove(x)
+                        a, b = digits[0][1], digits[-1][1] + 1
+                        self.script = self.script[:a] + ["~mcode~"] + self.script[a:b] + ["~moutput~"] + self.script[b:]
+                        break
+
+            temp = ['']
+            for cur in self.script:
+                if len(temp[-1]) >= 100:
+                    temp.append('')
+                temp[-1] += cur
+
+            with open("script.js", "w", newline='') as f:
+                f.write("var script = '';\n")
+                for cur in temp:
+                    f.write(f"script += '{cur}'\n")
+            self.script = None
 
 
 @opt("Find all rooms")
@@ -167,10 +207,10 @@ def run_input(filename, log_all="no"):
                 if cur.startswith("! log_memory "):
                     cur = cur[13:]
                     memory_log[int(cur)] = -1
-                    program.show(f"Ok, memory log for {cur} enabled")
+                    program.show(f"> Memory log for {cur} enabled")
                 elif cur.startswith("! log_reads"):
                     program.log_reads = True
-                    program.show(f"Ok, read log enabled")
+                    program.show(f"> Read log enabled")
                 elif cur.startswith("! reverse_mirror"):
                     for row in program.room[::-1]:
                         m = re.search("[ \"]([A-Za-z0-9]{12})[ \"]", row)
@@ -182,10 +222,10 @@ def run_input(filename, log_all="no"):
                         "q": "p",
                     }
                     code = "".join([reflect.get(x, x) for x in code])
-                    program.show('The code in the mirror is "' + code + '"')
+                    program.show('> The code in the mirror is "' + code + '"')
                 elif cur.startswith("! save"):
                     program.save_state.serialize("saved.zip")
-                    program.show("State saved to 'saved.zip'")
+                    program.show("> State saved to 'saved.zip'")
                 elif cur.startswith("! opcodes "):
                     _opcodes.clear()
                     cur = [x for x in cur[10:].split(",")]
@@ -193,14 +233,14 @@ def run_input(filename, log_all="no"):
                         if str(op) in cur or "all" in cur:
                             _opcodes[op] = all_codes[op]
                     _opcodes['names'] = all_codes['names']
-                    program.show("Enabled opcodes: " + ", ".join(cur))
+                    program.show("> Enabled opcodes: " + ", ".join(cur))
                 elif cur == "! run":
                     program = Program()
                     program.need_header = False
                     program.load_bytes(machine)
                     program.run(abort_on_input=True)
                 elif cur == "! end":
-                    program.show("Goodbye!")
+                    program.show("> Goodbye!")
                     logger.finish()
                     exit(0)
                 elif cur.startswith("! type "):
@@ -208,36 +248,36 @@ def run_input(filename, log_all="no"):
                     with open(os.path.join("source", m.group(1))) as f:
                         lines = f.readlines()
                         for i in range(int(m.group(2)) - 1, int(m.group(3))):
-                            program.show(lines[i])
+                            program.show("> " + lines[i].strip("\r\n"))
                 elif cur.startswith("! decompile "):
                     cur = [int(x) for x in cur[12:].split(' ')]
                     pc = 0
-                    program.show(f"Decompiling from {cur[0]} to {cur[1]}:")
+                    program.show(f"> Decompiling from {cur[0]} to {cur[1]}:")
                     while pc < len(program.memory):
                         next_pc, info = program.decode(pc)
                         if pc >= cur[0]:
-                            program.show(info)
+                            program.show("> " + info)
                         if next_pc > cur[1]:
                             break
                         pc = next_pc
                 elif cur.startswith("! set_register "):
                     cur = cur[15:].split(' ')
                     program.registers[int(cur[0])-1] = int(cur[1])
-                    program.show(f"Ok, register #{cur[0]} set to {cur[1]}")
+                    program.show(f"> Register #{cur[0]} set to {cur[1]}")
                 elif cur.startswith("! set_memory "):
                     cur = cur[13:].split(' ')
                     program.memory[int(cur[0])] = int(cur[1])
-                    program.show(f"Ok, memory address {cur[0]} set to {cur[1]}")
+                    program.show(f"> Memory address {cur[0]} set to {cur[1]}")
                 elif cur.startswith("! op "):
                     cur = cur[5:].split(' ')
                     program.memory[int(cur[0])] = _opcodes['names'][cur[1]]
-                    program.show(f"Ok, set {cur[0]} to {cur[1]}")
+                    program.show(f"> Set {cur[0]} to {cur[1]}")
                 elif cur.startswith("! no_op "):
                     cur = int(cur[8:])
                     num_to_set = _opcodes[program.memory[cur]]['size']
                     for i in range(num_to_set):
                         program.memory[cur + i] = 21
-                    program.show(f"Ok, set {num_to_set} values starting at {cur} to noop")
+                    program.show(f"> Set {num_to_set} values starting at {cur} to noop")
                 else:
                     raise Exception()
             else:
