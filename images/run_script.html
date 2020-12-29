@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en-us">
+<head>
+<meta charset="utf-8"/>
+<title>Synacor Challenge</title>
+<!-- <link href='//fonts.googleapis.com/css?family=Source+Code+Pro:300&subset=latin,latin-ext' rel='stylesheet' type='text/css'/> -->
+<script>
+var script = '';
+script += '# Welcome!  Lines like this are comments from me.\n';
+script += '# Input commands that start with a "!" are instructions for the interpreter\n';
+script += '\n';
+script += 'There are 2 exits:\n';
+script += '- doorway\n';
+script += '- south\n';
+script += '\n';
+script += 'What do you do? ~minput~use tablet\n';
+script += '~moutput~\n';
+script += 'ok, tablet used\n';
+script += '\n';
+script += '# Welcome!  Lines like this are comments from me.\n';
+script += '# Input commands that start with a "!" are instructions for the interpreter\n';
+script += '\n';
+script += '\n';
+script += 'There are 2 exits:\n';
+script += '- doorway\n';
+script += '- south\n';
+script += '\n';
+script += 'What do you do? ~minput~use tablet\n';
+script += '~moutput~\n';
+script += 'ok, tablet used\n';
+
+var rmode = /^~m(.*?)~/;
+var speed = 0;
+var bail = 0;
+
+function tick() {
+    if (script.length > 0) {
+        var ticker = document.getElementById('ticker');
+        var ticker_at = document.getElementById('ticker_at');
+        var scroll = document.getElementById("console_scroll");
+        for (;;) {
+            if (bail > 0) {
+                bail--;
+                break;
+            }
+            var used = false;
+            if (!used) {
+                var m = rmode.exec(script);
+                if (m) {
+                    used = true;
+                    ticker_at.id = "";
+                    ticker.innerHTML += '<span class="' + m[1] + '" id="ticker_at">';
+                    ticker_at = document.getElementById('ticker_at');
+                    script = script.slice(m[0].length);
+                    if (m[1] == "input") {
+                        speed = 1;
+                        bail = 50;
+                    } else {
+                        speed = 0;
+                    }
+                }
+            }
+            if (!used) {
+                var x = script.slice(0, 1);
+                script = script.slice(1);
+                ticker_at.innerHTML += x;
+                bail = speed;
+                break;
+            }
+        }
+        scroll.scrollTop = scroll.scrollHeight;
+    }
+};
+window.onload = function() {
+    window.setInterval(tick, 25);
+};
+</script>
+<style>
+body {
+    background: #0f0f23; /*337 x 5*/
+    color: #cccccc;
+    font-family: "Source Code Pro", monospace;
+    font-size: 14pt;
+    min-width: 60em;
+}
+.console {
+    width: 500px; height: 500px;position:relative;
+    /* width: 200px;
+    height: 100px; */
+}
+.console div {
+    max-height:100%;overflow:auto;
+    -ms-overflow-style: none;  /* Internet Explorer 10+ */
+    scrollbar-width: none;  /* Firefox */
+}
+.console div::-webkit-scrollbar { 
+    display: none;  /* Safari and Chrome */
+}
+.console div div {
+    overflow: hidden;
+}
+pre {
+    white-space: pre-wrap;
+    white-space: -moz-pre-wrap;
+    white-space: -pre-wrap;
+    white-space: -o-pre-wrap;
+    word-wrap: break-word;
+}
+.item {
+    color: red;
+    width: 200px
+}
+.item_not {
+    color: blue;
+    width: 200px
+}
+.reg {
+    width: 200px;
+}
+.comment {
+    color:red;
+}
+.input {
+    color:blue;
+}
+.output {
+    color:yellow;
+}
+</style>
+</head>
+<body>
+<table border="1">
+<tbody>
+<tr>
+<td rowspan="16" valign="top">
+<div class="console"><div id="console_scroll"><div>
+<pre id='ticker'><span id="ticker_at" class="output"></span></pre>
+</div></div></div>
+</td>
+<td colspan="2">Room ID: <span id="room">1234</span></td>
+</tr>
+<tr><td>Items</td><td>Registers</td></tr>
+<tr><td><div id="item_2670" class="item_not">tablet</div></td><td><div class="reg">1: <span id="reg_0">0</span></div></td></tr>
+<tr><td><div id="item_2674" class="item_not">lantern</div></td><td><div class="reg">2: <span id="reg_1">0</span></div></td></tr>
+<tr><td><div id="item_2686" class="item">can</div></td><td><div class="reg">3: <span id="reg_2">0</span></div></td></tr>
+<tr><td><div id="item_2690" class="item_not">red coin</div></td><td><div class="reg">4: <span id="reg_3">0</span></div></td></tr>
+<tr><td><div id="item_2694" class="item_not">corroded coin</div></td><td><div class="reg">5: <span id="reg_4">0</span></div></td></tr>
+<tr><td><div id="item_2698" class="item_not">shiny coin</div></td><td><div class="reg">6: <span id="reg_5">0</span></div></td></tr>
+<tr><td><div id="item_2702" class="item_not">concave coin</div></td><td><div class="reg">7: <span id="reg_6">0</span></div></td></tr>
+<tr><td><div id="item_2706" class="item_not">blue coin</div></td><td><div class="reg">8: <span id="reg_7">0</span></div></td></tr>
+<tr><td><div id="item_2710" class="item_not">teleporter</div></td></tr>
+<tr><td><div id="item_2714" class="item_not">business card</div></td></tr>
+<tr><td><div id="item_2718" class="item_not">orb</div></td></tr>
+<tr><td><div id="item_2722" class="item_not">mirror</div></td></tr>
+<tr><td><div id="item_2726" class="item_not">strange book</div></td></tr>
+<tr><td><div id="item_2730" class="item_not">journal</div></td></tr>
+</table>
+</body>
+</html>
