@@ -11,17 +11,26 @@ use tablet
 
 # Transport to before the sign
 ! set_memory 2732 2402
+! set_memory 2733 2402
+! set_memory 3726 24
 # This will show the fifth code
 north
 
+# While we don't need the coins, we do need the values that get set when they're picked up, the transporter uses these for its codes
+! set_memory 27102 9
+! set_memory 27103 2
+! set_memory 27104 5
+! set_memory 27105 7
+! set_memory 27106 3
+
 # Pick up the teleporter
 ! set_memory 2710 0
+
 # Using the teleporter reveals the sixth code
 use teleporter
 
 # We still need to set the 8th register so the code is properly revealed, as the code uses this register
 ! set_register 8 25734
-# ! set_register 1 5
 # Disable the jump to the confirmation process, it takes forever
 ! no_op 5489
 # And the invert the logic of this jump, thus continuing as if the confirmation worked.

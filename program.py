@@ -482,7 +482,7 @@ class Program:
                 opcode = self.memory[self.pc]
                 if abort_on_input and len(self.input_buffer) == 0:
                     if opcode == _opcodes['names']['in']:
-                        return
+                        return ""
                 if opcode not in _opcodes:
                     raise ProgramException(f"Unknown opcode: {opcode}")
                 opcode = _opcodes[opcode]
@@ -491,7 +491,7 @@ class Program:
                     args.append(self.memory[self.pc + i])
                 self.pc += opcode['size']
                 opcode['func'](*args)
-            return "Done"
+            return ""
         except ProgramException as msg:
             if not self.hide_output:
                 if len(self.output_buffer) > 0:

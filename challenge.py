@@ -63,7 +63,7 @@ class Logger:
         self.state = "output"
         self.script = []
         self.last_register = {}
-        self.last_memory = {}
+        self.last_memory = {2732: -1}
         self.track = {
             2732, 2670, 2674, 2678, 2682, 2686, 
             2690, 2694, 2698, 2702, 2706, 2710, 
@@ -80,19 +80,30 @@ class Logger:
             'YOUlUoXioTpY',
         ])
 
+    def reset(self):
+        self.last_memory = {2732: -2}
+
     def add(self, value):
         self.script.append(value)
 
     def handle_memory(self, program):
+        temp = []
         for i in range(len(program.registers)):
             if self.last_register.get(i, -1) != program.registers[i]:
-                self.add(f"~r{i}{program.registers[i]}~")
+                temp.append(f"{i}{program.registers[i]}")
                 self.last_register[i] = program.registers[i]
+        if len(temp) > 0:
+            self.add(f"~r{','.join(temp)}~")
+        temp = []
         for cur in self.track:
             if cur < len(program.memory):
                 if self.last_memory.get(cur, -1) != program.memory[cur]:
-                    self.add(f"~v{cur}{program.memory[cur]}~")
+                    temp.append(f"{cur}{program.memory[cur]}")
                     self.last_memory[cur] = program.memory[cur]
+        if len(temp) > 0:
+            self.add(f"~v{','.join(temp)}~")
+            if f"~v{','.join(temp)}~" == "~v~":
+                exit(1)
 
     def add_message(self, state, value):
         if self.state != state:
@@ -204,7 +215,13 @@ def run_input(filename, log_all="no"):
                 program.show(cur)
             elif cur.startswith("!"):
                 program.show(cur, input=True)
-                if cur.startswith("! log_memory "):
+                if cur.startswith("! dump"):
+                    for i in range(5000):
+                        if i in program.changed:
+                            program.show(f"> ! set_memory {i} {program.changed[i]}")
+                    for i in range(8):
+                        program.show(f"> ! set_register {i+1} {program.registers[i]}")
+                elif cur.startswith("! log_memory "):
                     cur = cur[13:]
                     memory_log[int(cur)] = -1
                     program.show(f"> Memory log for {cur} enabled")
@@ -238,7 +255,15 @@ def run_input(filename, log_all="no"):
                     program = Program()
                     program.need_header = False
                     program.load_bytes(machine)
-                    program.run(abort_on_input=True)
+                    logger.reset()
+                    ret = program.run(abort_on_input=True)
+                    if len(ret) > 0:
+                        program.show(f"> ERROR: {ret}")
+                    for x in memory_log:
+                        if memory_log[x] != program.memory[x]:
+                            val = program.memory[x]
+                            program.show(f">> Memory {x} changed to {val}")
+                            memory_log[x] = val
                 elif cur == "! end":
                     program.show("> Goodbye!")
                     logger.finish()
@@ -282,7 +307,9 @@ def run_input(filename, log_all="no"):
                     raise Exception()
             else:
                 program.input_buffer = cur + "\n"
-                program.run(abort_on_input=True)
+                ret = program.run(abort_on_input=True)
+                if len(ret) > 0:
+                    program.show(f"> ERROR: {ret}")
                 for x in memory_log:
                     if memory_log[x] != program.memory[x]:
                         val = program.memory[x]

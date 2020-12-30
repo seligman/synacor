@@ -1,23 +1,3 @@
-## TODO: Draw the room and items somehow
-### Memory addresses
-## 2732 => 2317 != 2337, room?
-## 2670 => 2317 != 0 tablet
-## 2674 => 2357 != 0 lantern
-## 2678 => 32767 != 0 lantern (with oil)
-## 2682 => 32767 != 0 lantern (lit)
-## 2686 => 2417 != 0 can
-## 2690 => 2452 != 0 red coin
-## 2694 => 2473 != 0 corroded coin
-## 2698 => 2483 != 0 shiny coin
-## 2702 => 2468 != 0 concave coin
-## 2706 => 2478 != 0 blue coin
-## 2710 => 2463 != 0 teleporter
-## 2714 => 2488 != 0 business card
-## 2718 => 2623 != 0 orb
-## 2722 => 2643 != 0 mirror
-## 2726 => 2488 != 0 strange book
-## 2730 => 2553 != 0 journal
-
 # Welcome!  Lines like this are comments from me.
 # Input commands that start with a "!" are instructions for the interpreter
 # The first code is in the machine spec itself
@@ -108,7 +88,6 @@ look strange book
 
 # "energy_level" in this project is an implementation of this, showing which value of the eigth register will result in a correct value.  Here it's being set with a backdoor to set the register
 ! set_register 8 25734
-# ! set_register 1 5
 
 # Disable the jump to the confirmation process, it takes forever
 ! no_op 5489
