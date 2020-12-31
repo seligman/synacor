@@ -3,7 +3,8 @@ The are two codes that you can find before the main game itself.  The first is t
 Once you've implemented the rest of the opcodes and pass the machine's self-test, you get the third code, and the the main event starts with a text adventure:
 
     == Foothills ==
-    You find yourself standing at the base of an enormous mountain.  At its base to the north, there is a massive doorway.  A sign nearby reads "Keep out!  Definitely no treasure within!"
+    You find yourself standing at the base of an enormous mountain.  At its base to the north, there is a
+    massive doorway.  A sign nearby reads "Keep out!  Definitely no treasure within!"
 
     Things of interest here:
     - tablet
